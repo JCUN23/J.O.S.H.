@@ -4,6 +4,8 @@ A Batcave-themed smart home dashboard and AI assistant built with React + Node.j
 
 J.O.S.H. unifies smart lights, music, sports, weather, calendars, news, and more into a single voice-controlled command center — powered by **Sentinel**, a custom AI agent with the personality of Alfred Pennyworth.
 
+Video Demo: https://www.linkedin.com/feed/update/urn:li:activity:7437486243988361216/?originTrackingId=RfmW96FCw1jjPpJiZ3nKVQ%3D%3D
+
 ## Features
 
 ### Sentinel AI Assistant
