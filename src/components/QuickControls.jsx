@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { Music, Lightbulb, Cpu, TrendingUp, UserCheck } from 'lucide-react';
 import FaceManagement from './AuthAndProfiles/FaceManagement';
@@ -35,7 +36,9 @@ const QuickControls = ({ theme }) => {
             </div>
 
             {showFaceManagement && (
-                <FaceManagement onClose={() => setShowFaceManagement(false)} />
+                // Portal to <body> so the full-screen modal escapes the card's
+                // containing block (backdrop-filter/transform on ancestors would trap position: fixed).
+                createPortal(<FaceManagement onClose={() => setShowFaceManagement(false)} />, document.body)
             )}
             {showBluetooth && (
                 <BluetoothWidget

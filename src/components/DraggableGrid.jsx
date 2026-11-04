@@ -107,8 +107,9 @@ const DraggableGrid = ({ children, theme = 'cyan' }) => {
                         onDragStart={(e) => handleDragStart(e, index)}
                         onDragOver={(e) => handleDragOver(e, index)}
                         onDragEnd={handleDragEnd}
+                        style={{ '--i': index }}
                         className={`
-                            rounded-lg
+                            hud-panel rounded-lg
                             ${editMode ? 'ring-2 ring-yellow-500/50 cursor-move' : ''}
                             ${draggedIndex === index ? 'opacity-50' : ''}
                         `}

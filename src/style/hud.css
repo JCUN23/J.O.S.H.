@@ -1,0 +1,171 @@
+/* ==========================================================================
+   HUD layer: "light comes from the screens."
+   The only light in a cave is the monitors: the room glows faintly in the
+   theme accent, panels catch that light at their edges, type does the talking.
+   Everything keys off --hud / --hud-dim, set per theme via [data-hud].
+   ========================================================================== */
+
+.hud-root { --hud: 34 189 238; --hud-dim: 21 94 117; }            /* cyan (default) */
+.hud-root[data-hud="yellow"] { --hud: 240 255 13; --hud-dim: 137 109 10; }
+.hud-root[data-hud="mocha"]  { --hud: 157 131 114; --hud-dim: 85 65 62; }
+
+body { background: #020407; }
+
+/* ---------- The room ---------- */
+.hud-root {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 110% 55% at 50% -8%, rgb(var(--hud) / 0.13), transparent 62%),
+    radial-gradient(ellipse 70% 40% at 50% 112%, rgb(var(--hud) / 0.05), transparent 70%),
+    #020407;
+  background-attachment: fixed;
+}
+
+/* Faint instrument grid, fading out toward the edges */
+.hud-root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(var(--hud) / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--hud) / 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 75%);
+          mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 75%);
+}
+
+/* ---------- Type ---------- */
+.hud-display,
+.hud-panel h3,
+.hud-panel .text-4xl,
+.hud-panel .text-5xl,
+.hud-panel .text-6xl {
+  font-family: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.03em;
+}
+
+.hud-panel h3 {
+  font-weight: 600;
+  text-shadow: 0 0 14px rgb(var(--hud) / 0.35);
+}
+
+.hud-panel .text-4xl,
+.hud-panel .text-5xl,
+.hud-panel .text-6xl {
+  font-weight: 500;
+  text-shadow: 0 0 24px rgb(var(--hud) / 0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The wordmark: the brightest thing in the room */
+.hud-wordmark {
+  font-family: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 2.75rem;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  color: rgb(var(--hud));
+  text-shadow:
+    0 0 1px rgb(var(--hud) / 0.9),
+    0 0 18px rgb(var(--hud) / 0.55),
+    0 0 48px rgb(var(--hud) / 0.25);
+}
+
+.hud-clock {
+  font-family: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 16px rgb(var(--hud) / 0.4);
+}
+
+/* ---------- Panels: catch the light at the edges ---------- */
+.hud-panel { position: relative; }
+
+.hud-panel > div > :first-child {
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 1px 0 rgb(var(--hud) / 0.14),          /* top edge highlight */
+    inset 0 0 40px rgb(var(--hud) / 0.03),         /* faint inner glow */
+    0 0 0 1px rgb(var(--hud-dim) / 0.15);
+}
+
+/* HUD corner brackets (top-left + bottom-right) */
+.hud-panel::before,
+.hud-panel::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 2;
+  border-color: rgb(var(--hud) / 0.75);
+  filter: drop-shadow(0 0 4px rgb(var(--hud) / 0.6));
+}
+.hud-panel::before { top: -3px; left: -3px; border-top: 2px solid; border-left: 2px solid; }
+.hud-panel::after  { bottom: -3px; right: -3px; border-bottom: 2px solid; border-right: 2px solid; }
+
+/* ---------- The one bold moment: boot sequence ---------- */
+@keyframes hud-boot {
+  0%   { opacity: 0; filter: brightness(2.2) saturate(0.4); transform: translateY(4px); }
+  35%  { opacity: 0.85; }
+  45%  { opacity: 0.35; }                                     /* the flicker */
+  60%  { opacity: 1; filter: brightness(1.25); }
+  100% { opacity: 1; filter: none; transform: none; }
+}
+@keyframes hud-bracket {
+  from { opacity: 0; transform: scale(2.2); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.hud-panel {
+  animation: hud-boot 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 75ms + 380ms);   /* after header + top stack */
+}
+.hud-panel::before,
+.hud-panel::after {
+  animation: hud-bracket 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 75ms + 640ms);
+}
+.hud-panel::before { transform-origin: top left; }
+.hud-panel::after  { transform-origin: bottom right; }
+
+.hud-header { animation: hud-boot 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+/* ---------- Top stack: status ticker, quote, Sentinel interface ---------- */
+.hud-stack > * {
+  position: relative;
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 1px 0 rgb(var(--hud) / 0.14),
+    inset 0 0 40px rgb(var(--hud) / 0.03),
+    0 0 0 1px rgb(var(--hud-dim) / 0.15);
+  animation: hud-boot 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.hud-stack > :nth-child(1) { animation-delay: 140ms; }
+.hud-stack > :nth-child(2) { animation-delay: 210ms; }
+.hud-stack > :nth-child(3) { animation-delay: 280ms; }
+
+/* Brackets sit ON the border here (the ticker clips overflow) */
+.hud-stack > *::before,
+.hud-stack > *::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  z-index: 2;
+  border-color: rgb(var(--hud) / 0.7);
+}
+.hud-stack > *::before { top: 0; left: 0; border-top: 2px solid; border-left: 2px solid; border-top-left-radius: 0.5rem; }
+.hud-stack > *::after  { bottom: 0; right: 0; border-bottom: 2px solid; border-right: 2px solid; border-bottom-right-radius: 0.5rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-panel, .hud-panel::before, .hud-panel::after,
+  .hud-header, .hud-stack > * { animation: none; }
+}

@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { ProfileProvider } from './components/AuthAndProfiles/ProfileContext.jsx';
 import "./style/theme.css";
+import "./style/hud.css";
 
 createRoot(document.getElementById('root')).render(
   <ProfileProvider>

@@ -851,7 +851,7 @@ const BatcomputerHub = () => {
         onUnlock={() => setIsLocked(false)}
         theme={theme}
       />
-      <div className={`min-h-screen bg-black font-mono p-4 border border border-${theme}-800 ${isLocked ? 'blur-xl pointer-events-none' : ''}`}
+      <div data-hud={theme} className={`hud-root min-h-screen font-mono p-4 border border border-${theme}-800 ${isLocked ? 'blur-xl pointer-events-none' : ''}`}
         >
         <div className="max-w-[95%] mx-auto">
           <Header
@@ -864,7 +864,7 @@ const BatcomputerHub = () => {
           />
 
           {/* Fixed Top Section - Always visible */}
-          <div className="mb-4 space-y-4">
+          <div className="hud-stack mb-4 space-y-4">
             <SystemStatus theme={theme} isSpotifyConnected={token} isNewsConnected={isNewsOnline} isGoveeConnected={goveeIsConnected} isSmartThingsConnected={smartThingsIsConnected} isHueConnected={hueIsConnected} />
             {quoteTab}
             <VoiceAssistant

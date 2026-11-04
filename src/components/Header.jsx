@@ -44,7 +44,6 @@ const Header = ({ time, setTheme, theme, setIsLocked, widgetVisibility, toggleWi
 
     const border = `border-${theme}-800`;
     const text_400 = `text-${theme}-400`;
-    const text_500 = `text-${theme}-500`;
     const text_700 = `text-${theme}-700`;
 
     const widgetLabels = {
@@ -63,9 +62,9 @@ const Header = ({ time, setTheme, theme, setIsLocked, widgetVisibility, toggleWi
     };
 
     return (
-    <div className={`mb-6 flex items-center justify-between border-b ${border} pb-4`}>
+    <div className={`hud-header mb-6 flex items-center justify-between border-b ${border} pb-4`}>
         <div className="flex items-center gap-4">
-            <div className={`text-4xl font-bold ${text_500}`}>J.O.S.H.</div>
+            <div className="hud-wordmark">J.O.S.H.</div>
             <div className={`text-sm ${text_700}`}>Joint Operations & Systems Hub v1.0</div>
         </div>
         <div className="text-right flex relative">
@@ -114,7 +113,7 @@ const Header = ({ time, setTheme, theme, setIsLocked, widgetVisibility, toggleWi
                 <button className={`p-4 border ${border} rounded text-${theme}-400`} onClick={updateTheme}>Color</button>
             </div>
             <div>
-                <div className={`text-2xl font-bold text-${theme}-300`}>
+                <div className={`hud-clock text-2xl text-${theme}-300`}>
                     {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </div>
                 <div className={`text-sm text-${theme}-700`}>
