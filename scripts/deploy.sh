@@ -40,6 +40,7 @@ seed() {
 echo "==> Secrets/logins (first deploy only)"
 seed backend/.env "$APP_DIR/backend/.env"
 seed backend/data/tokens.json "$APP_DIR/backend/data/tokens.json"
+seed backend/data/faces.json "$APP_DIR/backend/data/faces.json"
 
 echo "==> Installing prod deps on Pi + restarting"
 ssh -t "$HOST" "cd $APP_DIR/backend && npm ci --omit=dev --no-audit --no-fund && sudo systemctl restart sentinel"

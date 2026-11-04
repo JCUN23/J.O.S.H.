@@ -42,6 +42,7 @@ app.get('/api/health', (req, res) => {
 app.use(require('./routes/auth'));
 app.use(require('./routes/spotify'));
 app.use(require('./routes/accounts'));
+app.use(require('./routes/faces'));
 app.use(require('./routes/hue'));
 app.use(require('./routes/tesla'));
 app.use(require('./routes/ai'));

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Lock, Loader2 } from 'lucide-react';
 import { useProfile } from './ProfileContext.jsx';
+import { getCachedFaces } from '../../utils/faceStore';
 const FaceLock = ({ isLocked, onUnlock, theme = 'cyan' }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [status, setStatus] = useState('');
@@ -46,7 +47,7 @@ const FaceLock = ({ isLocked, onUnlock, theme = 'cyan' }) => {
                 ]);
 
                 faceApiRef.current = window.faceapi;
-                const faces = JSON.parse(localStorage.getItem('registered_faces') || '[]');
+                const faces = getCachedFaces();
                 setRegisteredFaces(faces);
                 setIsLoading(false);
             } catch (err) {
@@ -67,7 +68,7 @@ const FaceLock = ({ isLocked, onUnlock, theme = 'cyan' }) => {
 
         const verify = async () => {
             try {
-                const faces = JSON.parse(localStorage.getItem('registered_faces') || '[]');
+                const faces = getCachedFaces();
                 if (!faces.length) return;
 
                 const detection = await faceApiRef.current

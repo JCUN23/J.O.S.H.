@@ -1,11 +1,12 @@
 import { Lock, Settings, Sun, Moon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { getCachedFaces } from '../utils/faceStore';
 
 // Header Component
 const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVisibility, toggleWidgetVisibility }) => {
     const [showWidgetMenu, setShowWidgetMenu] = useState(false);
     const dropdownRef = useRef(null);
-    const registeredFaces = JSON.parse(localStorage.getItem('registered_faces') || '[]');
+    const registeredFaces = getCachedFaces();
 
     // Close dropdown when clicking outside
     useEffect(() => {

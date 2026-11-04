@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { Camera, UserPlus, Trash2, Loader2, X } from 'lucide-react';
+import { saveFaces, syncFaces } from '../../utils/faceStore';
 
 const FaceManagement = ({ onClose }) => {
     const [registeredFaces, setRegisteredFaces] = useState([]);
@@ -40,9 +41,8 @@ const FaceManagement = ({ onClose }) => {
 
                 faceApiRef.current = window.faceapi;
 
-                // Load registered faces
-                const faces = JSON.parse(localStorage.getItem('registered_faces') || '[]');
-                setRegisteredFaces(faces);
+                // Load registered faces (shared list from the server)
+                setRegisteredFaces(await syncFaces());
 
                 setIsLoading(false);
                 setStatus('');
@@ -130,8 +130,8 @@ const FaceManagement = ({ onClose }) => {
                 registeredAt: new Date().toISOString()
             };
 
-            const updatedFaces = [...registeredFaces, newFace];
-            localStorage.setItem('registered_faces', JSON.stringify(updatedFaces));
+            // Saved on the server so every device (wall panel included) recognizes this face.
+            const updatedFaces = await saveFaces([...registeredFaces, newFace]);
             setRegisteredFaces(updatedFaces);
 
             setStatus(`Face registered successfully for ${newFaceName}!`);
@@ -145,10 +145,14 @@ const FaceManagement = ({ onClose }) => {
         }
     };
 
-    const deleteFace = (id) => {
-        const updatedFaces = registeredFaces.filter(face => face.id !== id);
-        localStorage.setItem('registered_faces', JSON.stringify(updatedFaces));
-        setRegisteredFaces(updatedFaces);
+    const deleteFace = async (id) => {
+        try {
+            const updatedFaces = await saveFaces(registeredFaces.filter(face => face.id !== id));
+            setRegisteredFaces(updatedFaces);
+        } catch (error) {
+            console.error('Delete face failed:', error);
+            setStatus("Couldn't reach Sentinel to delete that face. Check the backend, then try again.");
+        }
     };
 
     return (

@@ -70,8 +70,8 @@ Open the login link it prints and approve with the same account.
 SENTINEL_HOST=sentinel-pi npm run deploy
 ```
 
-First run only, this also copies the Mac's `backend/.env` and logins
-(`backend/data/tokens.json`) to the Pi. After that, the Pi's copies are the
+First run only, this also copies the Mac's `backend/.env`, logins
+(`backend/data/tokens.json`) and registered faces (`backend/data/faces.json`) to the Pi. After that, the Pi's copies are the
 source of truth and deploys never overwrite them. It ends with a health check.
 
 Anytime later, edit secrets on the Pi directly:
@@ -105,5 +105,5 @@ The tablet just keeps working: same URL, same certificate name, same OAuth redir
   integrations table shows which keys are missing.
 - **`sharp` errors:** `node_modules` was copied from the Mac. Deploy excludes it,
   so run `npm ci --omit=dev` in `/opt/sentinel/backend` on the Pi.
-- **Logged out of everything:** check `/opt/sentinel/backend/data/tokens.json`
-  exists and is owned by the service user.
+- **Logged out of everything / lock screen has no faces:** check
+  `/opt/sentinel/backend/data/` (`tokens.json`, `faces.json`) exists and is owned by the service user.

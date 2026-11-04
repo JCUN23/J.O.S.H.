@@ -14,6 +14,7 @@ import NewsWidget from './components/NewsWidget';
 import { exchangeCodeForToken } from "./components/Spotify/spotifyAuth";
 import { startSpotifyAuth, startSpotifyTokenSync } from "./components/Spotify/spotifyAuth";
 import { migrateLegacyTokens } from "./utils/authApi";
+import { getCachedFaces, syncFaces, FACES_CHANGED } from "./utils/faceStore";
 import { ProfileProvider } from './components/AuthAndProfiles/ProfileContext';
 import { useProfile } from './components/AuthAndProfiles/ProfileContext';
 import OnboardingScreen from './components/AuthAndProfiles/OnboardingScreen';
@@ -66,15 +67,11 @@ const BatcomputerHub = () => {
   });
 
   // Face Lock State
-  // Start locked when a face is registered on this device. With no faces there is no
-  // way to unlock, so start unlocked (same guard as the Lock button in Header).
-  const [isLocked, setIsLocked] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('registered_faces') || '[]').length > 0;
-    } catch {
-      return false;
-    }
-  });
+  // Start locked when faces are registered (cached copy of the server's list). With no
+  // faces there is no way to unlock, so start unlocked (same guard as the Lock button).
+  const [isLocked, setIsLocked] = useState(() => getCachedFaces().length > 0);
+  // Whether we already locked at startup from the local cache (see face sync below).
+  const startedLockedRef = useRef(getCachedFaces().length > 0);
   // eslint-disable-next-line no-unused-vars
   const [hasRegisteredFaces, setHasRegisteredFaces] = useState(false);
 
@@ -186,18 +183,23 @@ const BatcomputerHub = () => {
     return startSpotifyTokenSync();
   }, []);
 
-  // Check for registered faces on mount
+  // Registered faces: pull the shared list from the server. A device with no local
+  // copy yet (e.g. a freshly set-up tablet) locks as soon as faces arrive.
   useEffect(() => {
-    const checkFaces = () => {
-      const registeredFaces = JSON.parse(localStorage.getItem('registered_faces') || '[]');
-      setHasRegisteredFaces(registeredFaces.length > 0);
-    };
-
+    const checkFaces = () => setHasRegisteredFaces(getCachedFaces().length > 0);
     checkFaces();
+    syncFaces().then((faces) => {
+      if (faces.length && !startedLockedRef.current) setIsLocked(true);
+      startedLockedRef.current = true; // startup lock decided; later changes don't re-lock
+    });
 
-    // Re-check whenever localStorage changes (when faces are added/removed)
+    // Re-check on changes from this tab (custom event) and other tabs (storage)
+    window.addEventListener(FACES_CHANGED, checkFaces);
     window.addEventListener('storage', checkFaces);
-    return () => window.removeEventListener('storage', checkFaces);
+    return () => {
+      window.removeEventListener(FACES_CHANGED, checkFaces);
+      window.removeEventListener('storage', checkFaces);
+    };
   }, []);
 
   const recognitionRef = useRef(null);
