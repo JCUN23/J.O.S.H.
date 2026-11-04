@@ -48,7 +48,12 @@ const BatcomputerHub = () => {
 
   // Wake word detection state
   const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
-    return localStorage.getItem('wake_word_enabled') !== 'false';
+    const saved = localStorage.getItem('wake_word_enabled');
+    if (saved !== null) return saved !== 'false';
+    // Default off on Android: Chrome's speech recognition grabs audio focus each time
+    // it (re)starts, so always-on listening makes Spotify on the same device pause and
+    // resume constantly. Still one tap to turn on; the choice is remembered per device.
+    return !/Android/i.test(navigator.userAgent);
   });
   const [awaitingCommand, setAwaitingCommand] = useState(false);
   const [wakeWordActive, setWakeWordActive] = useState(false); // Is always-on listening active?
