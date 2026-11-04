@@ -1,3 +1,4 @@
+import { BACKEND_URL } from '../config';
 import { useEffect, useState, useRef, useCallback } from "react";
 import { TrendingUp, Clock, Loader2, Flame, Trophy, Tv, ExternalLink, Lightbulb, Zap } from "lucide-react";
 import {
@@ -58,10 +59,10 @@ const SportsWidget = ({ theme }) => {
     const [loading, setLoading] = useState(true);
     const [lightsSynced, setLightsSynced] = useState(false);
     const [syncedTeam, setSyncedTeam] = useState(null);
+    const [gameDayActive, setGameDayActive] = useState(false);
     const scrollRef = useRef(null);
     const previousLiveTeams = useRef([]);
 
-    const BACKEND_URL = 'http://localhost:3001';
 
     /* ---------- RGB → Hue HSB conversion ---------- */
     const rgbToHueSat = ({ r, g, b }) => {
@@ -89,12 +90,16 @@ const SportsWidget = ({ theme }) => {
         try {
             const promises = [];
 
-            // --- Govee: set both light strips ---
+            // --- Govee: set controllable strips to primary/secondary ---
             const devicesResponse = await fetch(`${BACKEND_URL}/api/govee/devices`);
             const devicesData = await devicesResponse.json();
 
             if (devicesData.data?.devices) {
-                devicesData.data.devices.forEach((device, index) => {
+                // Filter out H6076 (read-only, no color support)
+                const strips = devicesData.data.devices.filter(
+                    d => !d.model?.toUpperCase().startsWith('H6076')
+                );
+                strips.forEach((device, index) => {
                     const color = index % 2 === 0 ? teamColor.primary : teamColor.secondary;
                     promises.push(
                         fetch(`${BACKEND_URL}/api/govee/control`, {
@@ -145,6 +150,26 @@ const SportsWidget = ({ theme }) => {
         }
     }, []);
 
+    /* ---------- Game Day Mode (TV + Lights) ---------- */
+    const activateGameDay = useCallback(async (teamName) => {
+        setGameDayActive(true);
+        try {
+            // Lights handled locally (faster response)
+            setTeamColors(teamName);
+            // TV handled by backend (SmartThings API)
+            const res = await fetch(`${BACKEND_URL}/api/game-day`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team: teamName })
+            });
+            const data = await res.json();
+            console.log('🏟️ Game Day Mode:', data.message);
+        } catch (err) {
+            console.error('Game Day Mode failed:', err);
+        }
+        setTimeout(() => setGameDayActive(false), 5000);
+    }, [setTeamColors]);
+
     useEffect(() => {
         const fetchSports = async () => {
             setLoading(true);
@@ -167,9 +192,9 @@ const SportsWidget = ({ theme }) => {
             // Find teams that just went live (weren't live before, but are now)
             const newlyLive = currentLiveTeams.filter(team => !previousLive.includes(team));
 
-            // Auto-sync lights for the first newly live game
+            // Auto-trigger Game Day Mode for the first newly live game
             if (newlyLive.length > 0) {
-                setTeamColors(newlyLive[0]);
+                activateGameDay(newlyLive[0]);
             }
 
             previousLiveTeams.current = currentLiveTeams;
@@ -180,7 +205,7 @@ const SportsWidget = ({ theme }) => {
         // Refresh more frequently to catch live games
         const interval = setInterval(fetchSports, 60 * 1000); // Every minute
         return () => clearInterval(interval);
-    }, [setTeamColors]);
+    }, [setTeamColors, activateGameDay]);
 
     /* ---------- Auto-scroll ---------- */
     useEffect(() => {
@@ -285,14 +310,25 @@ const SportsWidget = ({ theme }) => {
                                             <span className="text-red-400 font-bold text-sm">LIVE NOW</span>
                                             <Tv size={16} className="text-red-400" />
                                             {teamColor && (
-                                                <button
-                                                    onClick={() => setTeamColors(team.team)}
-                                                    className="ml-auto flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs transition-all"
-                                                    title={`Set lights to ${teamColor.name}`}
-                                                >
-                                                    <Lightbulb size={12} />
-                                                    Sync Lights
-                                                </button>
+                                                <div className="ml-auto flex items-center gap-1">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); activateGameDay(team.team); }}
+                                                        disabled={gameDayActive}
+                                                        className={`flex items-center gap-1 bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 rounded text-xs transition-all ${gameDayActive ? 'opacity-50' : ''}`}
+                                                        title="Wake TV + sync lights"
+                                                    >
+                                                        <Tv size={12} />
+                                                        Game Day
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setTeamColors(team.team); }}
+                                                        className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs transition-all"
+                                                        title={`Set lights to ${teamColor.name}`}
+                                                    >
+                                                        <Lightbulb size={12} />
+                                                        Lights
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
 

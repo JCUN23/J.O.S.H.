@@ -378,9 +378,6 @@ app.post('/api/tesla/command', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend server running on http://127.0.0.1:5173:${PORT}`);
-});
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -461,9 +458,6 @@ app.get("/api/stoic", async (req, res) => {
   res.json(data);
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend running on http://127.0.0.1:5173:${PORT}`);
-});
 
 // Get all Govee devices
 app.get('/api/govee/devices', async (req, res) => {
@@ -908,6 +902,52 @@ app.post('/api/smartthings/devices/:deviceId/commands', async (req, res) => {
 });
 
 // ============================================
+// Game Day Mode API (triggered by SportsWidget)
+// ============================================
+app.post('/api/game-day', async (req, res) => {
+  const { team } = req.body;
+  if (!team) return res.status(400).json({ error: 'No team specified' });
+
+  const results = [];
+
+  // Wake TV from art mode → home screen
+  try {
+    const token = await getSmartThingsToken();
+    if (token) {
+      const devicesRes = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const frameTV = devicesRes.data.items?.find(d =>
+        d.label?.toLowerCase().includes('frame') &&
+        d.components?.[0]?.capabilities?.some(c => c.id === 'samsungvd.mediaInputSource')
+      );
+      if (frameTV) {
+        const deviceId = frameTV.deviceId;
+        const sendCmd = (capability, command, cmdArgs = []) =>
+          axios.post(`${SMARTTHINGS_BASE_URL}/devices/${deviceId}/commands`,
+            { commands: [{ capability, command, arguments: cmdArgs }] },
+            { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+          );
+        await sendCmd('samsungvd.ambient', 'off');
+        await sendCmd('switch', 'on');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await sendCmd('samsungvd.remoteControl', 'send', ['HOME']);
+        results.push('TV woken up and on home screen');
+      } else {
+        results.push('Frame TV not found on SmartThings');
+      }
+    } else {
+      results.push('SmartThings token not configured');
+    }
+  } catch (err) {
+    results.push(`TV error: ${err.message}`);
+  }
+
+  console.log(`🏟️ Game Day Mode activated for ${team}: ${results.join(', ')}`);
+  res.json({ message: `Game Day Mode: ${results.join('. ')}`, team });
+});
+
+// ============================================
 // Groq LLM for Sentinel AI
 // ============================================
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -967,14 +1007,28 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "control_tv",
-      description: "Control Samsung Frame TV via SmartThings",
+      description: "Control Samsung Frame TV via SmartThings — power, art mode, volume, HDMI input, home screen",
       parameters: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["on", "off", "art_mode_on", "art_mode_off", "mute", "volume", "hdmi"], description: "The action to perform" },
+          action: { type: "string", enum: ["on", "off", "art_mode_on", "art_mode_off", "mute", "volume", "hdmi", "home"], description: "The action to perform" },
           value: { type: "string", description: "For volume: number 0-100. For hdmi: 1-4" }
         },
         required: ["action"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "game_day_mode",
+      description: "Activate Game Day Mode — wakes the TV from art mode, navigates to the home screen for streaming apps, and sets all lights to the team's colors. Use when a followed team's game is about to start or is live.",
+      parameters: {
+        type: "object",
+        properties: {
+          team: { type: "string", description: "Team name: 'Lions', 'Pistons', 'Michigan', 'Barcelona'" }
+        },
+        required: ["team"]
       }
     }
   },
@@ -1397,9 +1451,152 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     }
   }
 
+  // ===== GAME DAY MODE =====
+  if (toolName === 'game_day_mode') {
+    const GAME_DAY_TEAMS = {
+      lions: { primary: { r: 0, g: 118, b: 182 }, secondary: { r: 176, g: 183, b: 188 }, name: 'Detroit Lions', colorName: 'Honolulu Blue & Silver' },
+      pistons: { primary: { r: 200, g: 16, b: 46 }, secondary: { r: 29, g: 66, b: 186 }, name: 'Detroit Pistons', colorName: 'Red & Blue' },
+      michigan: { primary: { r: 255, g: 203, b: 5 }, secondary: { r: 0, g: 39, b: 76 }, name: 'Michigan', colorName: 'Maize & Blue' },
+      barcelona: { primary: { r: 165, g: 0, b: 68 }, secondary: { r: 0, g: 77, b: 152 }, name: 'FC Barcelona', colorName: 'Blaugrana' },
+    };
+
+    const teamKey = Object.keys(GAME_DAY_TEAMS).find(k =>
+      (args.team || '').toLowerCase().includes(k)
+    );
+    if (!teamKey) return `Unknown team "${args.team}". Supported: Lions, Pistons, Michigan, Barcelona.`;
+    const team = GAME_DAY_TEAMS[teamKey];
+    const results = [];
+
+    // 1. Wake TV from art mode and go to home screen
+    try {
+      const token = await getSmartThingsToken();
+      if (token) {
+        const devicesRes = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const frameTV = devicesRes.data.items?.find(d =>
+          d.label?.toLowerCase().includes('frame') &&
+          d.components?.[0]?.capabilities?.some(c => c.id === 'samsungvd.mediaInputSource')
+        );
+        if (frameTV) {
+          const deviceId = frameTV.deviceId;
+          const sendCmd = (capability, command, cmdArgs = []) =>
+            axios.post(`${SMARTTHINGS_BASE_URL}/devices/${deviceId}/commands`,
+              { commands: [{ capability, command, arguments: cmdArgs }] },
+              { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+            );
+          // Disable art mode → switch on → navigate to home
+          await sendCmd('samsungvd.ambient', 'off');
+          await sendCmd('switch', 'on');
+          // Small delay so TV wakes before HOME command
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          await sendCmd('samsungvd.remoteControl', 'send', ['HOME']);
+          results.push('TV woken up and on home screen');
+        } else {
+          results.push('Frame TV not found');
+        }
+      } else {
+        results.push('SmartThings not connected');
+      }
+    } catch (err) {
+      results.push(`TV error: ${err.message}`);
+    }
+
+    // 2. Set Govee lights — strip 1 primary, strip 2 secondary
+    try {
+      const devicesRes = await axios.get(`${GOVEE_BASE_URL}/devices`, {
+        headers: { 'Govee-API-Key': GOVEE_API_KEY }
+      });
+      const strips = (devicesRes.data?.data?.devices || []).filter(
+        d => !d.model?.toUpperCase().startsWith('H6076')
+      );
+      await Promise.all(strips.map((d, i) =>
+        axios.put(`${GOVEE_BASE_URL}/devices/control`, {
+          device: d.device, model: d.model,
+          cmd: { name: 'color', value: i % 2 === 0 ? team.primary : team.secondary }
+        }, { headers: { 'Govee-API-Key': GOVEE_API_KEY, 'Content-Type': 'application/json' } })
+      ));
+      results.push(`Govee strips set to ${team.colorName}`);
+    } catch (err) {
+      results.push(`Govee error: ${err.message}`);
+    }
+
+    // 3. Set Hue Go lights — left primary, right secondary
+    try {
+      if (HUE_BRIDGE_IP && HUE_USERNAME) {
+        const primaryHsb = rgbToHueBridgeHSB(team.primary);
+        const secondaryHsb = rgbToHueBridgeHSB(team.secondary);
+        await Promise.all([
+          axios.put(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights/5/state`, { on: true, ...primaryHsb }),
+          axios.put(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights/4/state`, { on: true, ...secondaryHsb }),
+        ]);
+        results.push('Hue Go set to team colors');
+      }
+    } catch (err) {
+      results.push(`Hue error: ${err.message}`);
+    }
+
+    return `Game Day Mode activated for ${team.name}! ${results.join('. ')}.`;
+  }
+
   // ===== STUBS (not yet wired server-side) =====
   if (toolName === 'control_spotify') return 'Use the play_music tool instead for music requests. For basic playback control (pause/skip), action noted: ' + args.action;
-  if (toolName === 'control_tv') return 'TV control not yet wired server-side. Action noted: ' + args.action;
+  // ===== TV CONTROL (SmartThings → Samsung Frame TV) =====
+  if (toolName === 'control_tv') {
+    try {
+      const token = await getSmartThingsToken();
+      if (!token) return 'SmartThings not connected. Josh needs to add a token.';
+
+      // Find Frame TV device
+      const devicesRes = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const frameTV = devicesRes.data.items?.find(d =>
+        d.label?.toLowerCase().includes('frame') &&
+        d.components?.[0]?.capabilities?.some(c => c.id === 'samsungvd.mediaInputSource')
+      );
+      if (!frameTV) return 'No Samsung Frame TV found on SmartThings.';
+
+      const deviceId = frameTV.deviceId;
+      const sendCmd = (capability, command, cmdArgs = []) =>
+        axios.post(`${SMARTTHINGS_BASE_URL}/devices/${deviceId}/commands`,
+          { commands: [{ capability, command, arguments: cmdArgs }] },
+          { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        );
+
+      if (args.action === 'on') {
+        await sendCmd('switch', 'on');
+        return 'TV powered on.';
+      } else if (args.action === 'off') {
+        await sendCmd('switch', 'off');
+        return 'TV powered off.';
+      } else if (args.action === 'art_mode_on') {
+        await sendCmd('samsungvd.ambient', 'on');
+        return 'Art mode enabled.';
+      } else if (args.action === 'art_mode_off') {
+        await sendCmd('samsungvd.ambient', 'off');
+        return 'Art mode disabled.';
+      } else if (args.action === 'mute') {
+        await sendCmd('audioMute', 'mute');
+        return 'TV muted.';
+      } else if (args.action === 'volume') {
+        const level = parseInt(args.value) || 20;
+        await sendCmd('audioVolume', 'setVolume', [level]);
+        return `TV volume set to ${level}.`;
+      } else if (args.action === 'hdmi') {
+        const input = `HDMI${args.value || '1'}`;
+        await sendCmd('samsungvd.mediaInputSource', 'setInputSource', [input]);
+        return `TV switched to ${input}.`;
+      } else if (args.action === 'home') {
+        await sendCmd('samsungvd.remoteControl', 'send', ['HOME']);
+        return 'TV navigated to home screen.';
+      }
+
+      return `Unknown TV action: ${args.action}`;
+    } catch (err) {
+      return `TV control failed: ${err.message}`;
+    }
+  }
   if (toolName === 'get_news') return 'News headlines not currently available.';
   if (toolName === 'get_calendar') return 'Calendar access not available in this context.';
 
@@ -1420,11 +1617,13 @@ You can control:
 - Govee lights (light strips, rope lights, lamps) via control_govee_lights
 - Philips Hue lights (Hue Go portables, color lamps) via control_hue_lights
 - Music via play_music (search and play artists, songs, moods, genres on Spotify — can also set lights to match album art colors)
-- Samsung Frame TV via control_tv
+- Samsung Frame TV via control_tv (power, art mode, volume, HDMI, home screen)
+- Game Day Mode via game_day_mode — wakes TV, goes to home screen, sets all lights to team colors. Use when a game is live or about to start.
 - Get info: time, weather, calendar, sports, news
 
 When asked to control "the lights" or "all lights" with no specifics, control BOTH Govee and Hue.
 When someone mentions an artist, mood, or vibe for music, use play_music with set_lights=true for the full immersive experience.
+When someone mentions a game is on, a team is playing, or asks to set up for a game, use game_day_mode.
 
 When you use a tool, briefly confirm what you did. If it's conversation, respond naturally.
 
@@ -1626,4 +1825,9 @@ app.post('/api/tts', async (req, res) => {
     console.error('ElevenLabs TTS error:', error.response?.data || error.message);
     res.status(500).json({ error: 'TTS generation failed' });
   }
+});
+
+// Bind on all interfaces so devices on the LAN (wall tablet) can reach it.
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend running on port ${PORT} (all interfaces)`);
 });
