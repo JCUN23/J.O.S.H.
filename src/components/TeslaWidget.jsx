@@ -1,7 +1,7 @@
+import { BACKEND_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { Car, Battery, Zap, Lock, Unlock, Wind, MapPin, RefreshCw } from 'lucide-react';
 
-const BACKEND_URL = 'http://127.0.0.1:3001';
 
 const TeslaWidget = ({ theme }) => {
     const [isConnected, setIsConnected] = useState(false);

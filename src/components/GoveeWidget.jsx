@@ -1,3 +1,4 @@
+import { BACKEND_URL } from '../config';
 import { useEffect, useState, useCallback } from "react";
 import {
     Lightbulb,
@@ -10,7 +11,6 @@ import {
     Lock
 } from "lucide-react";
 
-const BACKEND_URL = "http://localhost:3001";
 
 const inferCapabilities = (device) => {
     const model = device.model?.toUpperCase() || "";

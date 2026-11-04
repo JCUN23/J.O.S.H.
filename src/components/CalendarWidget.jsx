@@ -1,3 +1,4 @@
+import { BACKEND_URL } from '../config';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, RefreshCw, Loader2 } from 'lucide-react';
 import { startGoogleAuth, getGoogleCalendarEvents } from '../utils/calendarApi';
@@ -56,7 +57,7 @@ const CalendarWidget = ({ theme }) => {
             // Exchange code for token
             const exchangeToken = async () => {
                 try {
-                    const response = await fetch('http://127.0.0.1:3001/auth/google/token', {
+                    const response = await fetch(`${BACKEND_URL}/auth/google/token`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ code })

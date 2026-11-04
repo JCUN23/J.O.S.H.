@@ -1,3 +1,4 @@
+import { BACKEND_URL } from '../config';
 import { useEffect, useState, useCallback } from 'react';
 import { Lightbulb, Power, Loader2, RefreshCw, Palette, ChevronDown, ChevronUp, Sun } from 'lucide-react';
 
@@ -17,7 +18,6 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
     const bgClass = `bg-${theme}-950/30`;
     const textClass = `text-${theme}-400`;
 
-    const BACKEND_URL = 'http://localhost:3001';
 
     const loadLights = useCallback(async () => {
         try {

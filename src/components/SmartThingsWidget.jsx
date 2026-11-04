@@ -1,3 +1,4 @@
+import { BACKEND_URL } from '../config';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
     Tv,
@@ -23,7 +24,6 @@ import {
     Rewind
 } from 'lucide-react';
 
-const BACKEND_URL = 'http://127.0.0.1:3001';
 
 const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
     const [, setDevices] = useState([]);

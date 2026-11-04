@@ -1,3 +1,4 @@
+import { BACKEND_URL } from '../config';
 /**
  * Sentinel Local - Device control and Groq AI integration
  * Only handles device controls locally, everything else goes to Groq
@@ -5,7 +6,6 @@
 
 import { getAccessToken as getSpotifyToken } from '../components/Spotify/spotifyAuth';
 
-const BACKEND_URL = 'http://127.0.0.1:3001';
 const SPOTIFY_BASE = 'https://api.spotify.com/v1';
 
 // Color name to RGB mapping

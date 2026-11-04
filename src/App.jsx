@@ -1,3 +1,4 @@
+import { BACKEND_URL } from './config';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header';
 import VoiceAssistant from './components/VoiceAssistant';
@@ -115,7 +116,7 @@ const BatcomputerHub = () => {
 
       sessionStorage.setItem("tesla_code_exchanged", "true");
 
-      fetch('http://127.0.0.1:3001/auth/tesla/token', {
+      fetch(`${BACKEND_URL}/auth/tesla/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
@@ -214,7 +215,7 @@ const BatcomputerHub = () => {
     // Always try ElevenLabs first — autoplay is allowed after user interaction
     // (clicking mic, speaking wake word, or typing all count as interaction)
     try {
-      const response = await fetch('http://127.0.0.1:3001/api/tts', {
+      const response = await fetch(`${BACKEND_URL}/api/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
@@ -726,7 +727,7 @@ const BatcomputerHub = () => {
         let quote = "0".repeat(1000);
         let author = "";
         while (quote.length > 100 || author.length <= 0) {
-          const res = await fetch("http://127.0.0.1:3001/api/stoic");
+          const res = await fetch(`${BACKEND_URL}/api/stoic`);
           const json = await res.json();
           quote = json.data.quote.replace(/[\r\n]+@/g, " ");
           author = json.data.author;

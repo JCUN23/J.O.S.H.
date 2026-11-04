@@ -1,4 +1,4 @@
-const BACKEND_URL = 'http://127.0.0.1:3001';
+import { BACKEND_URL } from '../config';
 
 // Sentinel system prompt based on CLAUDE.md personality spec
 const SENTINEL_SYSTEM_PROMPT = `You are SENTINEL (Strategic Intelligence & Executive Liaison), the AI assistant for Josh's Batcave-themed smart office called J.O.S.H. (Joint Operations & Systems Hub).
