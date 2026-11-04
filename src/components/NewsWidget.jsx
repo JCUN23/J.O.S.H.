@@ -7,6 +7,7 @@ const NewsWidget = ({ theme, setNewsIsOnline }) => {
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [loadError, setLoadError] = useState('');
     const scrollRef = useRef(null);
 
     const loadNews = async (category) => {
@@ -16,10 +17,12 @@ const NewsWidget = ({ theme, setNewsIsOnline }) => {
                 ? await fetchAllCategories(5)
                 : await fetchNews(category, 10);
             setNews(articles);
+            setLoadError('');
             setLoading(false);
             setNewsIsOnline(true);
         } catch (error) {
             console.error('Error loading news:', error);
+            setLoadError("News sources aren't responding right now. It'll retry in 10 minutes, or tap refresh.");
             setLoading(false);
             setNewsIsOnline(false);
         }
@@ -148,7 +151,7 @@ const NewsWidget = ({ theme, setNewsIsOnline }) => {
                 </div>
             ) : news.length === 0 ? (
                 <div className={`text-center text-${theme}-600'} py-8`}>
-                    No news available. Try refreshing.
+                    {loadError || 'No news available. Try refreshing.'}
                 </div>
             ) : (
                 <div
