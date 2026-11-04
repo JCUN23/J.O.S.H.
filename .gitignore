@@ -32,3 +32,7 @@ backend/piper/
 *.njsproj
 *.sln
 *.sw?
+
+# env backups (contain secrets)
+.env.bak*
+backend/.env.bak*
