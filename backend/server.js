@@ -73,3 +73,9 @@ app.use(errorHandler);
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Backend running on port ${PORT} (all interfaces)`);
 });
+
+// Server-side Game Day (lights + TV when a followed team's game goes live).
+// Only when run directly (`node server.js`), never when tests require this file.
+if (require.main === module && process.env.GAMEDAY_AUTO !== 'false') {
+  require('./lib/gameDay').startWatcher();
+}

@@ -4,6 +4,8 @@ const sharp = require('sharp');
 const { GOVEE_API_KEY, GOVEE_BASE_URL, HUE_BRIDGE_IP, HUE_USERNAME } = require('../config');
 const { SMARTTHINGS_BASE_URL, getSmartThingsToken } = require('../smartthings');
 const { parseColor, rgbToHueBridgeHSB } = require('../color');
+const { findTeam, TEAMS } = require('../teams');
+const gameDay = require('../gameDay');
 
 // ---- executeTool: the switch statement that ACTUALLY does things ----
 // The model says "call X with Y" — this function runs YOUR code and returns a string result.
@@ -316,90 +318,11 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
 
   // ===== GAME DAY MODE =====
   if (toolName === 'game_day_mode') {
-    const GAME_DAY_TEAMS = {
-      lions: { primary: { r: 0, g: 118, b: 182 }, secondary: { r: 176, g: 183, b: 188 }, name: 'Detroit Lions', colorName: 'Honolulu Blue & Silver' },
-      pistons: { primary: { r: 200, g: 16, b: 46 }, secondary: { r: 29, g: 66, b: 186 }, name: 'Detroit Pistons', colorName: 'Red & Blue' },
-      michigan: { primary: { r: 255, g: 203, b: 5 }, secondary: { r: 0, g: 39, b: 76 }, name: 'Michigan', colorName: 'Maize & Blue' },
-      barcelona: { primary: { r: 165, g: 0, b: 68 }, secondary: { r: 0, g: 77, b: 152 }, name: 'FC Barcelona', colorName: 'Blaugrana' },
-    };
-
-    const teamKey = Object.keys(GAME_DAY_TEAMS).find(k =>
-      (args.team || '').toLowerCase().includes(k)
-    );
-    if (!teamKey) return `Unknown team "${args.team}". Supported: Lions, Pistons, Michigan, Barcelona.`;
-    const team = GAME_DAY_TEAMS[teamKey];
-    const results = [];
-
-    // 1. Wake TV from art mode and go to home screen
-    try {
-      const token = await getSmartThingsToken();
-      if (token) {
-        const devicesRes = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const frameTV = devicesRes.data.items?.find(d =>
-          d.label?.toLowerCase().includes('frame') &&
-          d.components?.[0]?.capabilities?.some(c => c.id === 'samsungvd.mediaInputSource')
-        );
-        if (frameTV) {
-          const deviceId = frameTV.deviceId;
-          const sendCmd = (capability, command, cmdArgs = []) =>
-            axios.post(`${SMARTTHINGS_BASE_URL}/devices/${deviceId}/commands`,
-              { commands: [{ capability, command, arguments: cmdArgs }] },
-              { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
-            );
-          // Disable art mode → switch on → navigate to home
-          await sendCmd('samsungvd.ambient', 'off');
-          await sendCmd('switch', 'on');
-          // Small delay so TV wakes before HOME command
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          await sendCmd('samsungvd.remoteControl', 'send', ['HOME']);
-          results.push('TV woken up and on home screen');
-        } else {
-          results.push('Frame TV not found');
-        }
-      } else {
-        results.push('SmartThings not connected');
-      }
-    } catch (err) {
-      results.push(`TV error: ${err.message}`);
-    }
-
-    // 2. Set Govee lights — strip 1 primary, strip 2 secondary
-    try {
-      const devicesRes = await axios.get(`${GOVEE_BASE_URL}/devices`, {
-        headers: { 'Govee-API-Key': GOVEE_API_KEY }
-      });
-      const strips = (devicesRes.data?.data?.devices || []).filter(
-        d => !d.model?.toUpperCase().startsWith('H6076')
-      );
-      await Promise.all(strips.map((d, i) =>
-        axios.put(`${GOVEE_BASE_URL}/devices/control`, {
-          device: d.device, model: d.model,
-          cmd: { name: 'color', value: i % 2 === 0 ? team.primary : team.secondary }
-        }, { headers: { 'Govee-API-Key': GOVEE_API_KEY, 'Content-Type': 'application/json' } })
-      ));
-      results.push(`Govee strips set to ${team.colorName}`);
-    } catch (err) {
-      results.push(`Govee error: ${err.message}`);
-    }
-
-    // 3. Set Hue Go lights — left primary, right secondary
-    try {
-      if (HUE_BRIDGE_IP && HUE_USERNAME) {
-        const primaryHsb = rgbToHueBridgeHSB(team.primary);
-        const secondaryHsb = rgbToHueBridgeHSB(team.secondary);
-        await Promise.all([
-          axios.put(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights/5/state`, { on: true, ...primaryHsb }),
-          axios.put(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights/4/state`, { on: true, ...secondaryHsb }),
-        ]);
-        results.push('Hue Go set to team colors');
-      }
-    } catch (err) {
-      results.push(`Hue error: ${err.message}`);
-    }
-
-    return `Game Day Mode activated for ${team.name}! ${results.join('. ')}.`;
+    // Shared with the API route and the automatic watcher (lib/gameDay)
+    const team = findTeam(args.team);
+    if (!team) return `Unknown team "${args.team}". Supported: ${TEAMS.map((t) => t.name).join(', ')}.`;
+    const entry = await gameDay.activate(team, { reason: 'voice' });
+    return `Game Day Mode activated for ${team.name} (${team.colors.name})! ${entry.results.join('. ')}.`;
   }
 
   // ===== STUBS (not yet wired server-side) =====

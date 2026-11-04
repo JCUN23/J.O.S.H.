@@ -61,114 +61,43 @@ const SportsWidget = ({ theme }) => {
     const [syncedTeam, setSyncedTeam] = useState(null);
     const [gameDayActive, setGameDayActive] = useState(false);
     const scrollRef = useRef(null);
-    const previousLiveTeams = useRef([]);
 
 
-    /* ---------- RGB → Hue HSB conversion ---------- */
-    const rgbToHueSat = ({ r, g, b }) => {
-        const rN = r / 255, gN = g / 255, bN = b / 255;
-        const max = Math.max(rN, gN, bN);
-        const min = Math.min(rN, gN, bN);
-        const delta = max - min;
+    /* ---------- Lights / Game Day: one shared engine on the server ---------- */
+    // The backend (lib/gameDay) also fires Game Day automatically, once per live
+    // game, with no browser open. These buttons are the manual versions.
+    const callGameDay = useCallback(async (teamName, { lightsOnly = false } = {}) => {
+        const res = await fetch(`${BACKEND_URL}/api/game-day`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ team: teamName, lightsOnly })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        console.log('🏟️ Game Day:', data.message);
+        return data;
+    }, []);
 
-        let h = 0;
-        if (delta !== 0) {
-            if (max === rN) h = ((gN - bN) / delta + (gN < bN ? 6 : 0)) / 6;
-            else if (max === gN) h = ((bN - rN) / delta + 2) / 6;
-            else h = ((rN - gN) / delta + 4) / 6;
-        }
-
-        const s = max === 0 ? 0 : delta / max;
-        return { hue: Math.round(h * 65535), sat: Math.round(s * 254), bri: Math.round(max * 254) };
-    };
-
-    /* ---------- Light Sync (Govee + Hue) ---------- */
     const setTeamColors = useCallback(async (teamName) => {
-        const teamColor = TEAM_COLORS[teamName];
-        if (!teamColor) return;
-
         try {
-            const promises = [];
-
-            // --- Govee: set controllable strips to primary/secondary ---
-            const devicesResponse = await fetch(`${BACKEND_URL}/api/govee/devices`);
-            const devicesData = await devicesResponse.json();
-
-            if (devicesData.data?.devices) {
-                // Filter out H6076 (read-only, no color support)
-                const strips = devicesData.data.devices.filter(
-                    d => !d.model?.toUpperCase().startsWith('H6076')
-                );
-                strips.forEach((device, index) => {
-                    const color = index % 2 === 0 ? teamColor.primary : teamColor.secondary;
-                    promises.push(
-                        fetch(`${BACKEND_URL}/api/govee/control`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                device: device.device,
-                                model: device.model,
-                                cmd: { name: 'color', value: color }
-                            })
-                        })
-                    );
-                });
-            }
-
-            // --- Hue Go: Left = primary, Right = secondary ---
-            const HUE_GO_IDS = { left: '5', right: '4' };
-            const primaryHsb = rgbToHueSat(teamColor.primary);
-            const secondaryHsb = rgbToHueSat(teamColor.secondary);
-
-            promises.push(
-                fetch(`${BACKEND_URL}/api/hue/lights/${HUE_GO_IDS.left}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: { on: true, ...primaryHsb } })
-                }),
-                fetch(`${BACKEND_URL}/api/hue/lights/${HUE_GO_IDS.right}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: { on: true, ...secondaryHsb } })
-                })
-            );
-
-            await Promise.all(promises);
-
+            await callGameDay(teamName, { lightsOnly: true });
             setLightsSynced(true);
             setSyncedTeam(teamName);
-
-            // Show sync indicator for 5 seconds
-            setTimeout(() => {
-                setLightsSynced(false);
-                setSyncedTeam(null);
-            }, 5000);
-
-            console.log(`🎨 Lights set to ${teamName} colors (${teamColor.name})`);
+            setTimeout(() => { setLightsSynced(false); setSyncedTeam(null); }, 5000);
         } catch (error) {
             console.error('Failed to sync lights:', error);
         }
-    }, []);
+    }, [callGameDay]);
 
-    /* ---------- Game Day Mode (TV + Lights) ---------- */
     const activateGameDay = useCallback(async (teamName) => {
         setGameDayActive(true);
         try {
-            // Lights handled locally (faster response)
-            setTeamColors(teamName);
-            // TV handled by backend (SmartThings API)
-            const res = await fetch(`${BACKEND_URL}/api/game-day`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ team: teamName })
-            });
-            const data = await res.json();
-            console.log('🏟️ Game Day Mode:', data.message);
+            await callGameDay(teamName);
         } catch (err) {
             console.error('Game Day Mode failed:', err);
         }
         setTimeout(() => setGameDayActive(false), 5000);
-    }, [setTeamColors]);
+    }, [callGameDay]);
 
     useEffect(() => {
         const fetchSports = async () => {
@@ -185,19 +114,7 @@ const SportsWidget = ({ theme }) => {
             const normalizedTeams = results.map(normalizeTeam).filter(Boolean);
             setTeams(normalizedTeams);
 
-            // Check for newly live games
-            const currentLiveTeams = normalizedTeams.filter(t => t.isLive).map(t => t.team);
-            const previousLive = previousLiveTeams.current;
-
-            // Find teams that just went live (weren't live before, but are now)
-            const newlyLive = currentLiveTeams.filter(team => !previousLive.includes(team));
-
-            // Auto-trigger Game Day Mode for the first newly live game
-            if (newlyLive.length > 0) {
-                activateGameDay(newlyLive[0]);
-            }
-
-            previousLiveTeams.current = currentLiveTeams;
+            // Auto Game Day now runs on the server (once per game, no browser needed).
             setLoading(false);
         };
 
@@ -205,7 +122,7 @@ const SportsWidget = ({ theme }) => {
         // Refresh more frequently to catch live games
         const interval = setInterval(fetchSports, 60 * 1000); // Every minute
         return () => clearInterval(interval);
-    }, [setTeamColors, activateGameDay]);
+    }, []);
 
     /* ---------- Auto-scroll ---------- */
     useEffect(() => {
