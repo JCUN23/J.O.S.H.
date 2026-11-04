@@ -27,8 +27,25 @@ function checkUrl(key, errors, { originOnly = false } = {}) {
   if (originOnly && u.pathname !== '/') errors.push(`${key} must be an origin with no path: "${v}"`);
 }
 
+// dotenv silently skips lines it can't parse (e.g. `const KEY = "x";` pasted from
+// code), so the key just... isn't there. Point at those lines instead.
+function findUnparsedLines(file = require('path').join(__dirname, '..', '.env')) {
+  let text;
+  try { text = require('fs').readFileSync(file, 'utf8'); } catch { return []; }
+  return text.split(/\r?\n/).flatMap((line, i) => {
+    if (/^\s*(#.*)?$/.test(line)) return [];                          // blank / comment
+    if (/^\s*(export\s+)?[A-Za-z_][A-Za-z0-9_.-]*\s*=/.test(line)) return []; // KEY=value
+    const name = (line.match(/[A-Z][A-Z0-9_]{2,}/) || [])[0];
+    return [`line ${i + 1}${name ? ` (${name})` : ''} isn't KEY=value, so it's ignored`];
+  });
+}
+
 function validateEnv() {
   const errors = [];
+
+  for (const problem of findUnparsedLines()) {
+    console.warn(`⚠️  backend/.env ${problem}`); // never print the line itself: it may hold a secret
+  }
 
   if (has('PORT')) {
     const p = Number(process.env.PORT);
@@ -58,4 +75,4 @@ function validateEnv() {
   return status;
 }
 
-module.exports = { validateEnv, INTEGRATIONS };
+module.exports = { validateEnv, findUnparsedLines, INTEGRATIONS };
