@@ -1,6 +1,7 @@
 // J.O.S.H. / Sentinel backend: composition root.
 // Load env -> validate -> wire routers -> static frontend -> error handling -> listen.
-require('dotenv').config();
+// DOTENV_CONFIG_PATH lets tests point at an empty fixture instead of the real .env
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || undefined, quiet: true });
 const { validateEnv } = require('./lib/env');
 const integrations = validateEnv();
 

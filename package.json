@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "panel": "vite build && npm --prefix backend start",
-    "deploy": "bash scripts/deploy.sh"
+    "deploy": "bash scripts/deploy.sh",
+    "test": "vitest run",
+    "test:all": "vitest run && npm --prefix backend test"
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -28,8 +31,10 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^26.1.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^3.2.7"
   }
 }
