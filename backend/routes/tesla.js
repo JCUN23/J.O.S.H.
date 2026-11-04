@@ -10,7 +10,8 @@ const router = express.Router();
 const tesla = require('teslajs');
 
 // Store tokens in memory (in production, use a database)
-let teslaTokens = {};
+const store = require('../lib/tokenStore');
+const { toStored } = require('../lib/oauth');
 // Tesla Fleet API rejects tailnet/reverse-proxy domains, so Tesla keeps its own
 // redirect (must match the Tesla portal exactly, in both authorize + token calls).
 const TESLA_REDIRECT_URI = process.env.TESLA_REDIRECT_URI || 'http://localhost:5173';
@@ -43,7 +44,7 @@ router.post('/auth/tesla/token', async (req, res) => {
       redirect_uri: TESLA_REDIRECT_URI
     });
 
-    teslaTokens = tokenResponse.data;
+    store.set('tesla', toStored(tokenResponse.data));
     res.json({ access_token: tokenResponse.data.access_token });
   } catch (error) {
     console.error('Tesla token exchange error:', error.response?.data || error.message);

@@ -6,6 +6,8 @@ const { SENTINEL_TOOLS } = require('../lib/sentinel/tools');
 const { SENTINEL_SYSTEM_PROMPT } = require('../lib/sentinel/prompt');
 const { executeTool } = require('../lib/sentinel/executeTool');
 
+const { getSpotifyAccessToken } = require('./spotify');
+
 const router = express.Router();
 
 // ---- THE AGENT LOOP ----
@@ -17,7 +19,9 @@ const router = express.Router();
 // That's how the model maintains context across multiple tool calls.
 router.post('/api/sentinel/chat', async (req, res) => {
   try {
-    const { message, spotifyToken } = req.body;
+    const { message } = req.body;
+    // Prefer the server-held Spotify login (always fresh); the browser's copy is a fallback.
+    const spotifyToken = (await getSpotifyAccessToken().catch(() => null)) || req.body.spotifyToken;
 
     if (!message) {
       return res.status(400).json({ error: 'No message provided' });

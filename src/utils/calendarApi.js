@@ -1,6 +1,8 @@
 import { BACKEND_URL } from '../config';
+import { getProviderToken } from './authApi';
 
 // Google Calendar Functions
+// Tokens live on the server (see utils/authApi.js); these helpers just ask for one.
 export async function startGoogleAuth() {
     window.location.href = `${BACKEND_URL}/auth/google`;
 }
@@ -11,41 +13,14 @@ export async function exchangeGoogleToken(code) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
     });
-
-    const data = await response.json();
-
-    localStorage.setItem('google_access_token', data.access_token);
-    localStorage.setItem('google_refresh_token', data.refresh_token);
-    localStorage.setItem('google_expires_at', Date.now() + data.expires_in * 1000);
-
-    return data.access_token;
-}
-
-export async function refreshGoogleToken() {
-    const refreshToken = localStorage.getItem('google_refresh_token');
-
-    const response = await fetch(`${BACKEND_URL}/auth/google/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken })
-    });
-
-    const data = await response.json();
-
-    localStorage.setItem('google_access_token', data.access_token);
-    localStorage.setItem('google_expires_at', Date.now() + data.expires_in * 1000);
-
-    return data.access_token;
+    if (!response.ok) throw new Error(`Google sign-in failed (HTTP ${response.status})`);
+    return (await response.json()).access_token;
 }
 
 export async function getGoogleToken() {
-    const expiresAt = Number(localStorage.getItem('google_expires_at'));
-
-    if (Date.now() < expiresAt - 60000) {
-        return localStorage.getItem('google_access_token');
-    }
-
-    return await refreshGoogleToken();
+    const t = await getProviderToken('google');
+    if (!t) throw new Error('Google Calendar not connected');
+    return t.access_token;
 }
 
 export async function getGoogleCalendarEvents() {
@@ -143,41 +118,14 @@ export async function exchangeMicrosoftToken(code) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
     });
-
-    const data = await response.json();
-
-    localStorage.setItem('microsoft_access_token', data.access_token);
-    localStorage.setItem('microsoft_refresh_token', data.refresh_token);
-    localStorage.setItem('microsoft_expires_at', Date.now() + data.expires_in * 1000);
-
-    return data.access_token;
-}
-
-export async function refreshMicrosoftToken() {
-    const refreshToken = localStorage.getItem('microsoft_refresh_token');
-
-    const response = await fetch(`${BACKEND_URL}/auth/microsoft/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken })
-    });
-
-    const data = await response.json();
-
-    localStorage.setItem('microsoft_access_token', data.access_token);
-    localStorage.setItem('microsoft_expires_at', Date.now() + data.expires_in * 1000);
-
-    return data.access_token;
+    if (!response.ok) throw new Error(`Microsoft sign-in failed (HTTP ${response.status})`);
+    return (await response.json()).access_token;
 }
 
 export async function getMicrosoftToken() {
-    const expiresAt = Number(localStorage.getItem('microsoft_expires_at'));
-
-    if (Date.now() < expiresAt - 60000) {
-        return localStorage.getItem('microsoft_access_token');
-    }
-
-    return await refreshMicrosoftToken();
+    const t = await getProviderToken('microsoft');
+    if (!t) throw new Error('Microsoft Calendar not connected');
+    return t.access_token;
 }
 
 export async function getMicrosoftCalendarEvents() {

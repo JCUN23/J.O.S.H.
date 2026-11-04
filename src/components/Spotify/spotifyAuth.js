@@ -1,3 +1,4 @@
+import { BACKEND_URL } from '../../config';
 const CLIENT_ID = "0982022f80f240138fd76bad2c53f3bd";
 const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI ?? window.location.origin;
 
@@ -62,15 +63,60 @@ export async function exchangeCodeForToken(code) {
     }
 
     const data = await res.json();
-
-    localStorage.setItem(TOKEN_KEY, data.access_token);
-    localStorage.setItem(
-        EXPIRY_KEY,
-        String(Date.now() + data.expires_in * 1000)
-    );
-
     localStorage.removeItem(VERIFIER_KEY);
+
+    // Hand the login to the server, which owns refreshing it (the old flow threw the
+    // refresh token away, so Spotify died after an hour). Every device shares it.
+    const stored = await fetch(`${BACKEND_URL}/auth/spotify/store`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            expires_in: data.expires_in,
+        }),
+    });
+    if (!stored.ok) console.warn("[Spotify] Server didn't store the login; this device only, ~1h:", stored.status);
+
+    cacheToken(data.access_token, Date.now() + data.expires_in * 1000);
     return data.access_token;
+}
+
+/* =====================
+   SERVER SYNC
+   The player reads a local cached access token (sync, cheap). This keeps that
+   cache fresh from the server, which refreshes ~5 min before expiry.
+===================== */
+
+const SYNC_MS = 4 * 60 * 1000;
+
+function cacheToken(token, expiresAt) {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(EXPIRY_KEY, String(expiresAt));
+}
+
+export async function syncSpotifyToken() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/auth/spotify/access-token`);
+        if (res.status === 404) {
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(EXPIRY_KEY);
+            return null;
+        }
+        if (!res.ok) return getAccessToken(); // backend hiccup: keep whatever we have
+        const { access_token, expires_at } = await res.json();
+        if (access_token !== localStorage.getItem(TOKEN_KEY)) cacheToken(access_token, expires_at);
+        return access_token;
+    } catch {
+        return getAccessToken();
+    }
+}
+
+// Call once at app start. Returns a stop function.
+export function startSpotifyTokenSync() {
+    syncSpotifyToken();
+    const id = setInterval(syncSpotifyToken, SYNC_MS);
+    return () => clearInterval(id);
 }
 
 /* =====================

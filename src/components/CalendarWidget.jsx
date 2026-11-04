@@ -1,7 +1,7 @@
-import { BACKEND_URL } from '../config';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, RefreshCw, Loader2 } from 'lucide-react';
-import { startGoogleAuth, getGoogleCalendarEvents } from '../utils/calendarApi';
+import { startGoogleAuth, getGoogleCalendarEvents, exchangeGoogleToken } from '../utils/calendarApi';
+import { getAuthStatus, disconnectProvider } from '../utils/authApi';
 
 const CalendarWidget = ({ theme }) => {
     const [events, setEvents] = useState([]);
@@ -13,16 +13,19 @@ const CalendarWidget = ({ theme }) => {
     const bgClass = `bg-${theme}-950/30`;
     const textClass = `text-${theme}-400`;
 
-    const checkConnection = useCallback(() => {
-        const token = localStorage.getItem('google_access_token');
-        const expiresAt = localStorage.getItem('google_expires_at');
-        // Consider connected if we have a token (even if expired, we can refresh)
-        setIsConnected(!!token && !!expiresAt);
-        return !!token && !!expiresAt;
+    // Connection lives on the server, shared by every device.
+    const checkConnection = useCallback(async () => {
+        try {
+            const status = await getAuthStatus();
+            setIsConnected(Boolean(status.google));
+            return Boolean(status.google);
+        } catch {
+            return false;
+        }
     }, []);
 
     const fetchEvents = useCallback(async () => {
-        if (!checkConnection()) return;
+        if (!(await checkConnection())) return;
 
         try {
             setLoading(true);
@@ -31,13 +34,10 @@ const CalendarWidget = ({ theme }) => {
             setEvents(googleEvents);
         } catch (err) {
             console.error('Failed to fetch calendar events:', err);
-            if (err.message?.includes('401') || err.message?.includes('invalid_grant')) {
-                // Token expired or invalid, clear and show connect button
-                localStorage.removeItem('google_access_token');
-                localStorage.removeItem('google_refresh_token');
-                localStorage.removeItem('google_expires_at');
+            if (err.message?.includes('not connected')) {
+                // Server cleared a revoked login: show the connect button
                 setIsConnected(false);
-                setError('Session expired. Please reconnect.');
+                setError('Google sign-in expired. Connect again to see events.');
             } else {
                 setError('Failed to load events');
             }
@@ -54,27 +54,16 @@ const CalendarWidget = ({ theme }) => {
 
         // Check if this is a Google OAuth callback
         if (code && state === 'google_calendar') {
-            // Exchange code for token
+            // OAuth codes are single-use; StrictMode runs effects twice in dev.
+            if (sessionStorage.getItem('google_code_exchanged') === code) return;
+            sessionStorage.setItem('google_code_exchanged', code);
+
             const exchangeToken = async () => {
                 try {
-                    const response = await fetch(`${BACKEND_URL}/auth/google/token`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ code })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.access_token) {
-                        localStorage.setItem('google_access_token', data.access_token);
-                        localStorage.setItem('google_refresh_token', data.refresh_token);
-                        localStorage.setItem('google_expires_at', Date.now() + data.expires_in * 1000);
-                        setIsConnected(true);
-                        // Clear URL params
-                        window.history.replaceState({}, '', '/');
-                        // Fetch events
-                        fetchEvents();
-                    }
+                    await exchangeGoogleToken(code); // server stores the login
+                    setIsConnected(true);
+                    window.history.replaceState({}, '', '/');
+                    fetchEvents();
                 } catch (err) {
                     console.error('Token exchange failed:', err);
                     setError('Failed to connect');
@@ -85,21 +74,17 @@ const CalendarWidget = ({ theme }) => {
         }
     }, [fetchEvents]);
 
-    // Initial load
+    // Initial load (fetchEvents checks the connection itself)
     useEffect(() => {
-        if (checkConnection()) {
-            fetchEvents();
-        }
-    }, [checkConnection, fetchEvents]);
+        fetchEvents();
+    }, [fetchEvents]);
 
     const handleConnect = () => {
         startGoogleAuth();
     };
 
-    const handleDisconnect = () => {
-        localStorage.removeItem('google_access_token');
-        localStorage.removeItem('google_refresh_token');
-        localStorage.removeItem('google_expires_at');
+    const handleDisconnect = async () => {
+        await disconnectProvider('google');
         setIsConnected(false);
         setEvents([]);
     };

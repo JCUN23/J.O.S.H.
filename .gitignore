@@ -36,3 +36,6 @@ backend/piper/
 # env backups (contain secrets)
 .env.bak*
 backend/.env.bak*
+
+# server-side OAuth token store (secrets)
+backend/data/

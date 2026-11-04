@@ -7,12 +7,18 @@ const SMARTTHINGS_PAT = process.env.SMARTTHINGS_TOKEN; // Legacy PAT fallback
 const SMARTTHINGS_BASE_URL = 'https://api.smartthings.com/v1';
 
 // In-memory token storage (persists until server restart)
-// Wrapped in an object so other modules see reassignments (stState.tokens = ...)
-const stState = { tokens: null };
-stState.tokens = {
-  access_token: null,
-  refresh_token: null,
-  expires_at: null
+// Persisted via the token store, so logins survive restarts/deploys. Getter/setter
+// keeps every existing `stState.tokens.x` / `stState.tokens = {...}` call site working.
+const store = require('./tokenStore');
+const EMPTY = Object.freeze({ access_token: null, refresh_token: null, expires_at: null });
+const stState = {
+  get tokens() {
+    return store.get('smartthings') || EMPTY;
+  },
+  set tokens(value) {
+    if (value && value.access_token) store.set('smartthings', value);
+    else store.clear('smartthings');
+  },
 };
 
 // Helper to get valid SmartThings token

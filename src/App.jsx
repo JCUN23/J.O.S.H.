@@ -12,7 +12,8 @@ import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
 import FaceLock from './components/AuthAndProfiles/FaceLock';
 import NewsWidget from './components/NewsWidget';
 import { exchangeCodeForToken } from "./components/Spotify/spotifyAuth";
-import { startSpotifyAuth } from "./components/Spotify/spotifyAuth";
+import { startSpotifyAuth, startSpotifyTokenSync } from "./components/Spotify/spotifyAuth";
+import { migrateLegacyTokens } from "./utils/authApi";
 import { ProfileProvider } from './components/AuthAndProfiles/ProfileContext';
 import { useProfile } from './components/AuthAndProfiles/ProfileContext';
 import OnboardingScreen from './components/AuthAndProfiles/OnboardingScreen';
@@ -124,6 +125,9 @@ const BatcomputerHub = () => {
 
     if (!code) return;
 
+    // Google's callback is handled by CalendarWidget; don't fall through into Spotify below.
+    if (state === 'google_calendar') return;
+
     // Handle Tesla OAuth
     if (state === 'tesla_auth') {
       if (sessionStorage.getItem("tesla_code_exchanged")) {
@@ -173,6 +177,13 @@ const BatcomputerHub = () => {
         // Clear the flag so user can retry
         sessionStorage.removeItem("spotify_code_exchanged");
       });
+  }, []);
+
+  // Server-held logins: move any old localStorage logins over once, then keep the
+  // Spotify player's cached token fresh from the server.
+  useEffect(() => {
+    migrateLegacyTokens();
+    return startSpotifyTokenSync();
   }, []);
 
   // Check for registered faces on mount

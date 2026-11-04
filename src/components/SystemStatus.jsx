@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { BACKEND_URL } from '../config';
+import { getAuthStatus } from '../utils/authApi';
 
 // System Status ticker: every integration's state scrolling right-to-left like a stock ticker.
-// Live flags come from widgets (props), OAuth state from localStorage, and server-side
+// Live flags come from widgets (props), OAuth state from the server's token store, and server-side
 // config from GET /api/health, so the bar reports reality instead of hardcoded strings.
 
 const STATE_CLASS = {
@@ -14,10 +15,6 @@ const STATE_CLASS = {
 
 const SECONDS_PER_ITEM = 2.5; // ticker speed scales with item count so it never races
 const REFRESH_MS = 60_000;
-
-const hasToken = (key) => {
-    try { return Boolean(localStorage.getItem(key)); } catch { return false; }
-};
 
 const useBackendHealth = () => {
     const [health, setHealth] = useState(null); // null = unknown yet
@@ -40,18 +37,20 @@ const useBackendHealth = () => {
     return health;
 };
 
-// Re-read localStorage-backed auth state periodically and when another tab changes it.
+// Which providers have a server-held login (shared by every device).
 const useAuthTokens = () => {
-    const read = () => ({
-        calendar: hasToken('google_access_token') || hasToken('microsoft_access_token'),
-        tesla: hasToken('tesla_access_token'),
-    });
-    const [tokens, setTokens] = useState(read);
+    const [tokens, setTokens] = useState({ calendar: false, tesla: false });
     useEffect(() => {
-        const update = () => setTokens(read());
-        const id = setInterval(update, REFRESH_MS);
-        window.addEventListener('storage', update);
-        return () => { clearInterval(id); window.removeEventListener('storage', update); };
+        let alive = true;
+        const load = async () => {
+            try {
+                const s = await getAuthStatus();
+                if (alive) setTokens({ calendar: s.google || s.microsoft, tesla: s.tesla });
+            } catch { /* backend down: the BACKEND item already shows it */ }
+        };
+        load();
+        const id = setInterval(load, REFRESH_MS);
+        return () => { alive = false; clearInterval(id); };
     }, []);
     return tokens;
 };

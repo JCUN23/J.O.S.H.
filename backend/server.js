@@ -12,7 +12,23 @@ const { PORT } = require('./lib/config');
 const { apiNotFound, errorHandler } = require('./lib/http');
 
 const app = express();
-app.use(cors());
+// CORS: only our own pages may read API responses. The API now hands out OAuth
+// access tokens, so a wide-open `*` would let any website opened on a tailnet device
+// read them. Production is same-origin (no CORS needed); this allowlist covers dev.
+const { FRONTEND_URL } = require('./lib/config');
+const PRIVATE_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+)$/;
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // same-origin requests and non-browser clients
+  try {
+    const u = new URL(origin);
+    if (u.origin === new URL(FRONTEND_URL).origin) return true;
+    // Note: not *.ts.net in general; anyone can host a Funnel page there.
+    return PRIVATE_HOST.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+app.use(cors({ origin: (origin, cb) => cb(null, isAllowedOrigin(origin)) }));
 app.use(express.json());
 
 // Health check for the wall panel / future monitoring. Reports which integrations
@@ -24,6 +40,8 @@ app.get('/api/health', (req, res) => {
 // Routers declare their full paths (/api/govee/..., /auth/google, ...) so a grep for a
 // URL lands on the file that handles it.
 app.use(require('./routes/auth'));
+app.use(require('./routes/spotify'));
+app.use(require('./routes/accounts'));
 app.use(require('./routes/hue'));
 app.use(require('./routes/tesla'));
 app.use(require('./routes/ai'));
