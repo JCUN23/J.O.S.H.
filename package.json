@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "panel": "vite build && npm --prefix backend start"
+    "panel": "vite build && npm --prefix backend start",
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",

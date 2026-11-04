@@ -1,0 +1,24 @@
+# systemd unit for Sentinel on the Pi. Installed by scripts/pi-bootstrap.sh,
+# which replaces __USER__ with the Pi's login user.
+[Unit]
+Description=Sentinel (J.O.S.H.) backend + wall panel
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=/opt/sentinel/backend
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+
+# Hardening: read-only OS, writable only where Sentinel keeps state.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/sentinel/backend/data
+
+[Install]
+WantedBy=multi-user.target
