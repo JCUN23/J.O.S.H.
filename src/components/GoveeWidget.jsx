@@ -1,5 +1,5 @@
 import { BACKEND_URL } from '../config';
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
     Lightbulb,
     Power,
@@ -12,18 +12,28 @@ import {
 } from "lucide-react";
 
 
+// Capabilities come from Govee's own supportCmds for each device (plugs report only
+// "turn", the projector has no color, etc.).
+// Known quirk, kept on purpose: H6076 lists color/brightness but in practice
+// accepted those commands with "Success" and ignored them, so it stays power-only.
+// Delete it from API_QUIRKS to try again.
+const API_QUIRKS = { H6076: ["turn"] };
+
 const inferCapabilities = (device) => {
     const model = device.model?.toUpperCase() || "";
-    const readOnly = model.startsWith("H6076");
+    const quirk = Object.keys(API_QUIRKS).find((m) => model.startsWith(m));
+    const cmds = new Set(quirk ? API_QUIRKS[quirk] : device.supportCmds || ["turn"]);
 
     return {
-        power: true,
-        brightness: !readOnly,
-        color: !readOnly,
-        temperature: !readOnly,
-        readOnly,
+        power: cmds.has("turn"),
+        brightness: cmds.has("brightness"),
+        color: cmds.has("color"),
+        temperature: cmds.has("colorTem"),
+        readOnly: Boolean(quirk),
     };
 };
+
+const SEND_DEBOUNCE_MS = 350; // color picker/slider fire continuously while dragging
 
 const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
     const [devices, setDevices] = useState([]);
@@ -34,6 +44,9 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
     const [error, setError] = useState("");
     const [rateLimited, setRateLimited] = useState(false);
     const [rateLimitMsg, setRateLimitMsg] = useState("");
+    const [online, setOnline] = useState(null); // null = unknown
+    const [controlError, setControlError] = useState("");
+    const debounceRef = useRef(null);
 
 
     const border = `border-${theme}-800`;
@@ -64,6 +77,24 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
         loadDevices();
     }, [loadDevices]);
 
+    // Govee's cloud can only reach devices it sees as online. Check on select so an
+    // offline device says so instead of silently ignoring commands.
+    useEffect(() => {
+        if (!selected) return;
+        let alive = true;
+        setOnline(null);
+        setControlError("");
+        fetch(`${BACKEND_URL}/api/govee/state/${encodeURIComponent(selected.device)}/${selected.model}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => {
+                if (!alive || !j) return;
+                const props = Object.assign({}, ...(j.data?.properties || []));
+                setOnline(props.online !== false && props.online !== "false");
+            })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, [selected]);
+
     const send = async (cmd) => {
         if (!selected || sending || rateLimited) return;
 
@@ -80,7 +111,8 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
                 }),
             });
 
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
+            setControlError("");
 
             if (res.status === 429 || data?.code === 429) {
                 setRateLimited(true);
@@ -91,9 +123,14 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
                     setRateLimited(false);
                     setRateLimitMsg("");
                 }, 2000);
+            } else if (!res.ok || (data?.code && data.code !== 200)) {
+                // Govee reports many failures in-band (HTTP 200 + { code, message })
+                const msg = data?.message || data?.error?.message || data?.error || `HTTP ${res.status}`;
+                setControlError(`Govee rejected that: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`);
             }
         } catch (e) {
             console.error("Govee control failed", e);
+            setControlError("Couldn't reach Sentinel's backend.");
         } finally {
             setSending(false);
         }
@@ -102,6 +139,14 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
 
     const setColor = (r, g, b) =>
         send({ name: "color", value: { r, g, b } });
+
+    // Send once the user stops dragging, not on every intermediate value
+    // (Govee's cloud allows only a handful of commands per device per minute).
+    const sendDebounced = (cmd) => {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => send(cmd), SEND_DEBOUNCE_MS);
+    };
+    useEffect(() => () => clearTimeout(debounceRef.current), []);
 
     const presetColors = [
         [255, 0, 0],
@@ -167,10 +212,17 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
             {/* CONTROLS */}
             {selected && caps && (
                 <div className="col-span-2 space-y-3">
+                    {online === false && (
+                        <div className="text-xs text-yellow-400 border border-yellow-700/60 rounded p-2">
+                            Offline in Govee's cloud, so commands can't reach it. Power-cycle it, or
+                            reconnect it to 2.4 GHz Wi-Fi in the Govee Home app.
+                        </div>
+                    )}
+                    {controlError && <div className="text-xs text-red-400">{controlError}</div>}
                     {caps.readOnly && (
                         <div className="flex items-center gap-2 text-yellow-400 text-xs">
                             <Lock size={14} />
-                            Read-only device (Govee API limitation)
+                            Power only (this model ignores color/brightness via the API)
                         </div>
                     )}
 
@@ -201,8 +253,10 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
                                 type="range"
                                 min="1"
                                 max="100"
-                                onMouseUp={(e) =>
-                                    send({ name: "brightness", value: +e.target.value })
+                                // onChange + debounce works for touch too (onMouseUp often
+                                // never fires on a touchscreen)
+                                onChange={(e) =>
+                                    sendDebounced({ name: "brightness", value: +e.target.value })
                                 }
                                 className="w-full"
                             />
@@ -216,11 +270,14 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
                                 type="color"
                                 onChange={(e) => {
                                     const c = e.target.value;
-                                    setColor(
-                                        parseInt(c.slice(1, 3), 16),
-                                        parseInt(c.slice(3, 5), 16),
-                                        parseInt(c.slice(5, 7), 16)
-                                    );
+                                    sendDebounced({
+                                        name: "color",
+                                        value: {
+                                            r: parseInt(c.slice(1, 3), 16),
+                                            g: parseInt(c.slice(3, 5), 16),
+                                            b: parseInt(c.slice(5, 7), 16),
+                                        },
+                                    });
                                 }}
                                 className="w-full h-10"
                             />
