@@ -722,19 +722,17 @@ const BatcomputerHub = () => {
 
   // Get Quote
   useEffect(() => {
+    // Backend guarantees { quote, author } (with its own retries + fallbacks),
+    // so this is a single request. No retry loop in the browser.
     const getQuote = async () => {
       try {
-        let quote = "0".repeat(1000);
-        let author = "";
-        while (quote.length > 100 || author.length <= 0) {
-          const res = await fetch(`${BACKEND_URL}/api/stoic`);
-          const json = await res.json();
-          quote = json.data.quote.replace(/[\r\n]+@/g, " ");
-          author = json.data.author;
+        const res = await fetch(`${BACKEND_URL}/api/stoic`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { quote, author } = await res.json();
+        if (quote && author) {
+          setQuoteText(quote);
+          setQuoteAuthor(author);
         }
-
-        setQuoteText(quote);
-        setQuoteAuthor(author);
       } catch (err) {
         console.error("Quote fetch error:", err);
       }
