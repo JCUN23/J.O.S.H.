@@ -65,7 +65,15 @@ const BatcomputerHub = () => {
   });
 
   // Face Lock State
-  const [isLocked, setIsLocked] = useState(false); // Always start unlocked
+  // Start locked when a face is registered on this device. With no faces there is no
+  // way to unlock, so start unlocked (same guard as the Lock button in Header).
+  const [isLocked, setIsLocked] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('registered_faces') || '[]').length > 0;
+    } catch {
+      return false;
+    }
+  });
   // eslint-disable-next-line no-unused-vars
   const [hasRegisteredFaces, setHasRegisteredFaces] = useState(false);
 
