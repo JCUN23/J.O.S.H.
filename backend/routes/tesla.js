@@ -1,51 +1,89 @@
-// Tesla (parked: Fleet API needs a public domain)
+// Tesla via the Fleet API, called directly with axios.
+// (Replaces `teslajs`, which targeted the deprecated Owner API and pulled in the
+// deprecated `request` library: the source of our remaining critical audit findings.)
+//
+// Still parked in practice: Fleet API partner registration needs a public domain
+// hosting your public key, and newer cars need signed commands (Tesla's vehicle
+// command proxy) for most actions. The plumbing below is ready for that day.
 const express = require('express');
 const axios = require('axios');
+const store = require('../lib/tokenStore');
+const { getValidToken, toStored } = require('../lib/oauth');
 
 const router = express.Router();
 
-// ============================================
-// Tesla API
-// ============================================
-const tesla = require('teslajs');
-
-// Store tokens in memory (in production, use a database)
-const store = require('../lib/tokenStore');
-const { toStored } = require('../lib/oauth');
-// Tesla Fleet API rejects tailnet/reverse-proxy domains, so Tesla keeps its own
-// redirect (must match the Tesla portal exactly, in both authorize + token calls).
+const AUTH_BASE = 'https://auth.tesla.com/oauth2/v3';
+const TOKEN_URL = 'https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token';
+// Regional Fleet API host (North America default). Also the OAuth `audience`.
+const FLEET_BASE = process.env.TESLA_FLEET_API_BASE || 'https://fleet-api.prd.na.vn.cloud.tesla.com';
+// Tesla rejects tailnet/reverse-proxy domains, so Tesla keeps its own redirect
+// (must match the Tesla portal exactly, in both authorize + token calls).
 const TESLA_REDIRECT_URI = process.env.TESLA_REDIRECT_URI || 'http://localhost:5173';
 
+const form = (params) => [new URLSearchParams(params), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }];
+
+const refreshTesla = async (refresh_token) => (await axios.post(TOKEN_URL, ...form({
+  grant_type: 'refresh_token',
+  client_id: process.env.TESLA_CLIENT_ID,
+  refresh_token,
+}))).data;
+
+// Server-held login first (any device), then a token the browser sent (legacy).
+async function resolveToken(req) {
+  const stored = await getValidToken('tesla', refreshTesla).catch(() => null);
+  return stored?.access_token || req.headers.authorization?.replace('Bearer ', '') || null;
+}
+
+// Fleet API responses are wrapped: { response: ... }
+async function fleet(token, method, path) {
+  const { data } = await axios({
+    method,
+    url: `${FLEET_BASE}/api/1${path}`,
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 15000,
+  });
+  return data.response;
+}
+
+const firstVehicle = async (token) => (await fleet(token, 'get', '/vehicles'))?.[0] || null;
+// Path tag for a vehicle. Never the numeric `id`: it can exceed 2^53, and JSON.parse
+// would silently round it to a different car. VIN (or the string id) is exact.
+const tagOf = (v) => v.vin || v.id_s;
+
+// Our command names -> Fleet API command endpoints
+const COMMANDS = {
+  lock: () => 'door_lock',
+  unlock: () => 'door_unlock',
+  climate: (value) => (value ? 'auto_conditioning_start' : 'auto_conditioning_stop'),
+  start_charge: () => 'charge_start',
+  stop_charge: () => 'charge_stop',
+  honk: () => 'honk_horn',
+};
+
 router.get('/auth/tesla', (req, res) => {
-  // Tesla uses OAuth 2.0 - redirect to login
-  const clientId = process.env.TESLA_CLIENT_ID;
-  const redirectUri = encodeURIComponent(TESLA_REDIRECT_URI);
-  const scopes = 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds';
-
-  const authUrl = `https://auth.tesla.com/oauth2/v3/authorize?` +
-    `client_id=${clientId}&` +
-    `redirect_uri=${redirectUri}&` +
-    `response_type=code&` +
-    `scope=${encodeURIComponent(scopes)}&` +
-    `state=tesla_auth`;
-
-  res.redirect(authUrl);
+  const params = new URLSearchParams({
+    client_id: process.env.TESLA_CLIENT_ID,
+    redirect_uri: TESLA_REDIRECT_URI,
+    response_type: 'code',
+    scope: 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds',
+    state: 'tesla_auth',
+  });
+  res.redirect(`${AUTH_BASE}/authorize?${params}`);
 });
 
 router.post('/auth/tesla/token', async (req, res) => {
   try {
     const { code } = req.body;
-
-    const tokenResponse = await axios.post('https://auth.tesla.com/oauth2/v3/token', {
+    const { data } = await axios.post(TOKEN_URL, ...form({
       grant_type: 'authorization_code',
       client_id: process.env.TESLA_CLIENT_ID,
       client_secret: process.env.TESLA_CLIENT_SECRET,
-      code: code,
-      redirect_uri: TESLA_REDIRECT_URI
-    });
-
-    store.set('tesla', toStored(tokenResponse.data));
-    res.json({ access_token: tokenResponse.data.access_token });
+      code,
+      audience: FLEET_BASE,
+      redirect_uri: TESLA_REDIRECT_URI,
+    }));
+    store.set('tesla', toStored(data));
+    res.json({ access_token: data.access_token });
   } catch (error) {
     console.error('Tesla token exchange error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Token exchange failed' });
@@ -54,77 +92,44 @@ router.post('/auth/tesla/token', async (req, res) => {
 
 router.get('/api/tesla/vehicle', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
+    const token = await resolveToken(req);
+    if (!token) return res.status(401).json({ error: 'Tesla not connected' });
 
-    // Get vehicle list
-    const vehicles = await tesla.vehiclesAsync({ authToken: token });
+    const vehicle = await firstVehicle(token);
+    if (!vehicle) return res.json({ error: 'No vehicles found' });
 
-    if (!vehicles || vehicles.length === 0) {
-      return res.json({ error: 'No vehicles found' });
-    }
-
-    // Get data for first vehicle
-    const vehicle = vehicles[0];
-    const vehicleData = await tesla.vehicleDataAsync({ authToken: token, vehicleID: vehicle.id_s });
-
-    res.json(vehicleData);
+    res.json(await fleet(token, 'get', `/vehicles/${tagOf(vehicle)}/vehicle_data`));
   } catch (error) {
-    console.error('Tesla vehicle data error:', error);
-    res.status(500).json({ error: 'Failed to fetch vehicle data' });
+    const status = error.response?.status;
+    console.error('Tesla vehicle data error:', status, error.response?.data || error.message);
+    // 408 = car asleep; surface it so the widget can say so instead of "failed"
+    res.status(status === 401 ? 401 : status === 408 ? 408 : 502).json({
+      error: status === 408 ? 'Vehicle is asleep' : 'Failed to fetch vehicle data',
+    });
   }
 });
 
 router.post('/api/tesla/command', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    const { command, value } = req.body;
+    const { command, value } = req.body || {};
+    if (!COMMANDS[command]) return res.status(400).json({ error: 'Unknown command' });
 
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
+    const token = await resolveToken(req);
+    if (!token) return res.status(401).json({ error: 'Tesla not connected' });
+
+    const vehicle = await firstVehicle(token);
+    if (!vehicle) return res.status(404).json({ error: 'No vehicles found' });
+
+    const result = await fleet(token, 'post', `/vehicles/${tagOf(vehicle)}/command/${COMMANDS[command](value)}`);
+    // Fleet API reports command failures in-band: { result: false, reason }
+    if (result && result.result === false) {
+      return res.status(409).json({ success: false, error: result.reason || 'Vehicle rejected the command', result });
     }
-
-    // Get vehicle list
-    const vehicles = await tesla.vehiclesAsync({ authToken: token });
-    if (!vehicles || vehicles.length === 0) {
-      return res.status(404).json({ error: 'No vehicles found' });
-    }
-
-    const vehicle = vehicles[0];
-    const options = { authToken: token, vehicleID: vehicle.id_s };
-
-    let result;
-    switch (command) {
-      case 'lock':
-        result = await tesla.doorLockAsync(options);
-        break;
-      case 'unlock':
-        result = await tesla.doorUnlockAsync(options);
-        break;
-      case 'climate':
-        result = value
-          ? await tesla.climateStartAsync(options)
-          : await tesla.climateStopAsync(options);
-        break;
-      case 'start_charge':
-        result = await tesla.chargeStartAsync(options);
-        break;
-      case 'stop_charge':
-        result = await tesla.chargeStopAsync(options);
-        break;
-      case 'honk':
-        result = await tesla.honkHornAsync(options);
-        break;
-      default:
-        return res.status(400).json({ error: 'Unknown command' });
-    }
-
     res.json({ success: true, result });
   } catch (error) {
-    console.error('Tesla command error:', error);
-    res.status(500).json({ error: 'Command failed' });
+    const status = error.response?.status;
+    console.error('Tesla command error:', status, error.response?.data || error.message);
+    res.status(status === 401 ? 401 : status === 408 ? 408 : 502).json({ error: 'Command failed' });
   }
 });
 
