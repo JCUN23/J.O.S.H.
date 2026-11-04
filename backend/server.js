@@ -265,11 +265,13 @@ const tesla = require('teslajs');
 
 // Store tokens in memory (in production, use a database)
 let teslaTokens = {};
+// Tesla's portal requires a path on redirect URIs; must match exactly in authorize + token calls
+const TESLA_REDIRECT_URI = `${FRONTEND_URL}/callback/tesla`;
 
 app.get('/auth/tesla', (req, res) => {
   // Tesla uses OAuth 2.0 - redirect to login
   const clientId = process.env.TESLA_CLIENT_ID;
-  const redirectUri = encodeURIComponent(FRONTEND_URL);
+  const redirectUri = encodeURIComponent(TESLA_REDIRECT_URI);
   const scopes = 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds';
 
   const authUrl = `https://auth.tesla.com/oauth2/v3/authorize?` +
@@ -291,7 +293,7 @@ app.post('/auth/tesla/token', async (req, res) => {
       client_id: process.env.TESLA_CLIENT_ID,
       client_secret: process.env.TESLA_CLIENT_SECRET,
       code: code,
-      redirect_uri: FRONTEND_URL
+      redirect_uri: TESLA_REDIRECT_URI
     });
 
     teslaTokens = tokenResponse.data;
