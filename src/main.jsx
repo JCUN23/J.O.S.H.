@@ -10,3 +10,13 @@ createRoot(document.getElementById('root')).render(
     <App />
   </ProfileProvider>
 )
+
+// Register the pass-through service worker (requires a secure context:
+// HTTPS, localhost, or the chrome://flags insecure-origin override).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .catch((err) => console.warn('SW registration failed:', err));
+  });
+}
