@@ -5,6 +5,21 @@ const { HUE_BRIDGE_IP, HUE_USERNAME } = require('../lib/config');
 
 const router = express.Router();
 
+// The bridge answers HTTP 200 even on failure. Success for these reads is an object
+// map ({ "1": {...light} }); failure is an array of { error }. Turn the latter into a
+// real error so the frontend never mistakes error objects for lights.
+function sendHueRead(res, data) {
+  if (Array.isArray(data)) {
+    const err = data.find((x) => x && x.error)?.error;
+    const message = err?.type === 1
+      ? 'Hue bridge rejected HUE_USERNAME (unauthorized user). Check backend/.env.'
+      : `Hue bridge error: ${err?.description || 'unexpected response'}`;
+    console.error('Hue bridge error:', err || data);
+    return res.status(502).json({ error: message, hueErrorType: err?.type });
+  }
+  return res.json(data);
+}
+
 // ===== PHILIPS HUE API ROUTES =====
 
 // Get all lights
@@ -15,7 +30,7 @@ router.get('/api/hue/lights', async (req, res) => {
     }
 
     const response = await axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights`);
-    res.json(response.data);
+    sendHueRead(res, response.data);
   } catch (error) {
     console.error('Hue lights error:', error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data || error.message });
@@ -52,7 +67,7 @@ router.get('/api/hue/groups', async (req, res) => {
     }
 
     const response = await axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/groups`);
-    res.json(response.data);
+    sendHueRead(res, response.data);
   } catch (error) {
     console.error('Hue groups error:', error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data || error.message });
@@ -89,7 +104,7 @@ router.get('/api/hue/scenes', async (req, res) => {
     }
 
     const response = await axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/scenes`);
-    res.json(response.data);
+    sendHueRead(res, response.data);
   } catch (error) {
     console.error('Hue scenes error:', error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data || error.message });

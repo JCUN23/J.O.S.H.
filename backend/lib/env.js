@@ -37,7 +37,15 @@ function findUnparsedLines(file = require('path').join(__dirname, '..', '.env'))
     if (/^\s*(export\s+)?[A-Za-z_][A-Za-z0-9_.-]*\s*=/.test(line)) return []; // KEY=value
     const name = (line.match(/[A-Z][A-Z0-9_]{2,}/) || [])[0];
     return [`line ${i + 1}${name ? ` (${name})` : ''} isn't KEY=value, so it's ignored`];
-  });
+  }).concat(
+    // Two lines glued together (an append onto a file with no trailing newline):
+    // KEY=valueOTHER_KEY=... parses, but both values end up wrong.
+    text.split(/\r?\n/).flatMap((line, i) => {
+      const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=(.*)$/);
+      const glued = m && m[2].match(/[A-Z][A-Z0-9_]{2,}=/);
+      return glued ? [`line ${i + 1} (${m[1]}) has "${glued[0]}" inside its value: two lines merged?`] : [];
+    })
+  );
 }
 
 function validateEnv() {

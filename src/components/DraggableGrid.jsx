@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Move, Lock, GripVertical } from 'lucide-react';
+import ErrorBoundary from './ErrorBoundary';
 
 const STORAGE_KEY = 'batcomputer_widget_order';
 
@@ -121,7 +122,10 @@ const DraggableGrid = ({ children, theme = 'cyan' }) => {
                             </div>
                         )}
                         <div className={editMode ? 'h-[calc(100%-28px)]' : ''}>
-                            {widget}
+                            {/* One widget crashing must not take down the whole panel */}
+                            <ErrorBoundary name={key} theme={theme}>
+                                {widget}
+                            </ErrorBoundary>
                         </div>
                     </div>
                 ))}

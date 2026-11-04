@@ -33,20 +33,20 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
             const lightsData = await lightsRes.json();
             const groupsData = await groupsRes.json();
 
-            if (lightsData.error) {
-                setError(lightsData.error);
+            if (!lightsRes.ok || lightsData.error) {
+                setError(lightsData.error || `Hue bridge unavailable (HTTP ${lightsRes.status})`);
                 setLoading(false);
                 setHueIsConnected(false);
                 return;
             }
 
             // Convert objects to arrays
-            const lightsArray = Object.entries(lightsData).map(([id, light]) => ({
-                id,
-                ...light
-            }));
+            // Only entries that are actually lights (have a state object)
+            const lightsArray = Object.entries(lightsData)
+                .filter(([, light]) => light && typeof light.state === 'object')
+                .map(([id, light]) => ({ id, ...light }));
 
-            const groupsArray = Object.entries(groupsData).map(([id, group]) => ({
+            const groupsArray = Object.entries(groupsRes.ok ? groupsData : {}).map(([id, group]) => ({
                 id,
                 ...group
             })).filter(g => g.type === 'Room' || g.type === 'Zone');
@@ -298,7 +298,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                     <div className={`bg-black/50 border ${borderClass} rounded p-3`}>
                         <div className={`font-semibold text-${theme}-300 mb-1 flex items-center gap-2`}>
                             {selectedLight.name}
-                            {selectedLight.state.on && (
+                            {selectedLight.state?.on && (
                                 <span className="text-xs bg-yellow-600/30 text-yellow-400 px-2 py-0.5 rounded">ON</span>
                             )}
                         </div>
@@ -345,7 +345,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                                     type="range"
                                     min="1"
                                     max="254"
-                                    defaultValue={selectedLight.state.bri || 127}
+                                    defaultValue={selectedLight.state?.bri || 127}
                                     onMouseUp={(e) => setBrightness(e.target.value)}
                                     onTouchEnd={(e) => setBrightness(e.target.value)}
                                     className="w-full"

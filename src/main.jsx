@@ -2,14 +2,17 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import ErrorBoundary from './components/ErrorBoundary';
 import { ProfileProvider } from './components/AuthAndProfiles/ProfileContext.jsx';
 import "./style/theme.css";
 import "./style/hud.css";
 
 createRoot(document.getElementById('root')).render(
-  <ProfileProvider>
-    <App />
-  </ProfileProvider>
+  <ErrorBoundary fullscreen>
+    <ProfileProvider>
+      <App />
+    </ProfileProvider>
+  </ErrorBoundary>
 )
 
 // Register the pass-through service worker (requires a secure context:
