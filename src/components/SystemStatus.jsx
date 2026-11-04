@@ -1,27 +1,134 @@
-import React from 'react';
-//import { theme } from '../theme';
+import React, { useEffect, useState } from 'react';
+import { BACKEND_URL } from '../config';
 
-// System Status Component
-const SystemStatus = ({ theme, isSpotifyConnected, isNewsConnected, isGoveeConnected, isSmartThingsConnected, isHueConnected }) => (
-    <div className={`col-span-12 bg-${theme}-950/30 border border-${theme}-800 rounded-lg p-3 text-xs`}>
-        <div className={`flex items-center justify-between text-xxs text-${theme}-700`}>
-            <div className="flex gap-6">
-                <div>SENTINEL: <span className="text-cyan-400">COMING SOON</span></div>
-                <div>WEATHER: <span className="text-green-400">ONLINE</span></div>
-                <div>SPOTIFY: <span className={isSpotifyConnected ? "text-green-400" : "text-cyan-400"}>{isSpotifyConnected ? "CONNECTED" : "PENDING AUTH"}</span></div>
-                <div>SPORTS: <span className="text-green-400">ONLINE</span></div>
-                <div>CALENDAR: <span className="text-cyan-400">PENDING AUTH</span></div>
-                <div>NEWS: <span className={isNewsConnected ? "text-green-400" : "text-red-400"}>{isNewsConnected ? "CONNECTED" : "OFFLINE"}</span></div>
+// System Status ticker: every integration's state scrolling right-to-left like a stock ticker.
+// Live flags come from widgets (props), OAuth state from localStorage, and server-side
+// config from GET /api/health, so the bar reports reality instead of hardcoded strings.
+
+const STATE_CLASS = {
+    ok: 'text-green-400',
+    pending: 'text-cyan-400',
+    off: 'text-red-400',
+    info: 'text-amber-400',
+};
+
+const SECONDS_PER_ITEM = 2.5; // ticker speed scales with item count so it never races
+const REFRESH_MS = 60_000;
+
+const hasToken = (key) => {
+    try { return Boolean(localStorage.getItem(key)); } catch { return false; }
+};
+
+const useBackendHealth = () => {
+    const [health, setHealth] = useState(null); // null = unknown yet
+    useEffect(() => {
+        let alive = true;
+        const load = async () => {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/health`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = await res.json();
+                if (alive) setHealth({ ok: true, integrations: json.integrations || [] });
+            } catch {
+                if (alive) setHealth({ ok: false, integrations: [] });
+            }
+        };
+        load();
+        const id = setInterval(load, REFRESH_MS);
+        return () => { alive = false; clearInterval(id); };
+    }, []);
+    return health;
+};
+
+// Re-read localStorage-backed auth state periodically and when another tab changes it.
+const useAuthTokens = () => {
+    const read = () => ({
+        calendar: hasToken('google_access_token') || hasToken('microsoft_access_token'),
+        tesla: hasToken('tesla_access_token'),
+    });
+    const [tokens, setTokens] = useState(read);
+    useEffect(() => {
+        const update = () => setTokens(read());
+        const id = setInterval(update, REFRESH_MS);
+        window.addEventListener('storage', update);
+        return () => { clearInterval(id); window.removeEventListener('storage', update); };
+    }, []);
+    return tokens;
+};
+
+const SystemStatus = ({ theme, isSpotifyConnected, isNewsConnected, isGoveeConnected, isSmartThingsConnected, isHueConnected }) => {
+    const health = useBackendHealth();
+    const tokens = useAuthTokens();
+
+    const configured = (name) => health?.integrations.find((i) => i.name === name)?.enabled;
+    const backendDown = health && !health.ok;
+
+    const connected = (flag) => (flag ? ['ok', 'CONNECTED'] : ['off', 'OFFLINE']);
+    const authed = (flag) => (flag ? ['ok', 'CONNECTED'] : ['pending', 'PENDING AUTH']);
+    const serverSide = (name, onText = 'ONLINE') => {
+        if (!health) return ['pending', 'CHECKING'];
+        if (backendDown) return ['off', 'BACKEND DOWN'];
+        return configured(name) ? ['ok', onText] : ['off', 'NOT CONFIGURED'];
+    };
+
+    const items = [
+        ['BACKEND', !health ? ['pending', 'CHECKING'] : health.ok ? ['ok', 'ONLINE'] : ['off', 'OFFLINE']],
+        ['SENTINEL', serverSide('Sentinel AI (Groq)')],
+        ['VOICE', serverSide('ElevenLabs TTS')],
+        ['WEATHER', ['ok', 'ONLINE']],
+        ['SPORTS', ['ok', 'ONLINE']],
+        ['SPOTIFY', authed(isSpotifyConnected)],
+        ['CALENDAR', authed(tokens.calendar)],
+        ['NEWS', connected(isNewsConnected)],
+        ['SMARTTHINGS', connected(isSmartThingsConnected)],
+        ['GOVEE', connected(isGoveeConnected)],
+        ['HUE', connected(isHueConnected)],
+        ['3D PRINTER', ['info', 'VIA CLOUD']],
+        ['TESLA', tokens.tesla ? ['ok', 'CONNECTED'] : ['info', 'PARKED']],
+        ['ARDUINO', ['off', 'OFFLINE']],
+        ['BLUETOOTH', ['off', 'OFFLINE']],
+    ];
+
+    const renderItems = (copy) =>
+        items.map(([label, [state, text]]) => (
+            <div key={`${copy}-${label}`} className="shrink-0" aria-hidden={copy === 'b' ? true : undefined}>
+                {label}: <span className={STATE_CLASS[state]}>{text}</span>
+                <span className={`mx-4 text-${theme}-800`}>◆</span>
             </div>
-            <div className="flex gap-6">
-                <div>SMARTTHINGS: <span className={isSmartThingsConnected ? "text-green-400" : "text-red-400"}>{isSmartThingsConnected ? "CONNECTED" : "OFFLINE"}</span></div>
-                <div>GOVEE: <span className={isGoveeConnected ? "text-green-400" : "text-red-400"}>{isGoveeConnected ? "CONNECTED" : "OFFLINE"}</span></div>
-                <div>HUE: <span className={isHueConnected ? "text-green-400" : "text-red-400"}>{isHueConnected ? "CONNECTED" : "OFFLINE"}</span></div>
-                <div>ARDUINO: <span className="text-red-400">OFFLINE</span></div>
-                <div>BLUETOOTH: <span className="text-red-400">OFFLINE</span></div>
+        ));
+
+    return (
+        <div className={`col-span-12 bg-${theme}-950/30 border border-${theme}-800 rounded-lg py-3 text-xs overflow-hidden`}>
+            <style>{`
+                @keyframes sentinel-ticker {
+                    from { transform: translateX(0); }
+                    to   { transform: translateX(-50%); }
+                }
+                .sentinel-ticker-track {
+                    animation: sentinel-ticker var(--ticker-duration) linear infinite;
+                }
+                .sentinel-ticker:hover .sentinel-ticker-track { animation-play-state: paused; }
+                .sentinel-ticker {
+                    -webkit-mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+                            mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .sentinel-ticker-track { animation: none; flex-wrap: wrap; row-gap: 0.25rem; }
+                    .sentinel-ticker-track > .copy-b { display: none; }
+                }
+            `}</style>
+            <div className="sentinel-ticker" role="status" aria-label="System status">
+                {/* Two identical copies side by side; sliding exactly -50% loops seamlessly. */}
+                <div
+                    className={`sentinel-ticker-track flex w-max text-xxs text-${theme}-700 whitespace-nowrap`}
+                    style={{ '--ticker-duration': `${items.length * SECONDS_PER_ITEM}s` }}
+                >
+                    <div className="flex">{renderItems('a')}</div>
+                    <div className="flex copy-b">{renderItems('b')}</div>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default SystemStatus;
