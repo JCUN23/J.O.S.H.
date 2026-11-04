@@ -1827,6 +1827,20 @@ app.post('/api/tts', async (req, res) => {
   }
 });
 
+// ============================================
+// Serve the built frontend (npm run build → ../dist) from the same origin.
+// Registered last so every /api and /auth route above wins first.
+// ============================================
+const path = require('path');
+const fs = require('fs');
+const DIST_DIR = path.join(__dirname, '..', 'dist');
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  // SPA fallback for client-side routes like /callback/microsoft (Express 5 wildcard syntax)
+  app.get('/{*splat}', (req, res) => res.sendFile(path.join(DIST_DIR, 'index.html')));
+  console.log(`Serving frontend from ${DIST_DIR}`);
+}
+
 // Bind on all interfaces so devices on the LAN (wall tablet) can reach it.
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Backend running on port ${PORT} (all interfaces)`);

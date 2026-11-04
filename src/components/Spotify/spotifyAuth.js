@@ -1,5 +1,5 @@
 const CLIENT_ID = "0982022f80f240138fd76bad2c53f3bd";
-const REDIRECT_URI = "http://127.0.0.1:5173";
+const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI ?? window.location.origin;
 
 const TOKEN_KEY = "spotify_access_token";
 const EXPIRY_KEY = "spotify_token_expiry";
