@@ -106,7 +106,7 @@ async function executeTool(toolName, toolInput, getCalendarEvents) {
                 try {
                     const events = await getCalendarEvents();
                     return { events: events.length > 0 ? events : "No events scheduled for today or tomorrow" };
-                } catch (err) {
+                } catch {
                     return { error: "Calendar not connected" };
                 }
             }
@@ -140,11 +140,12 @@ async function executeGoveeControl(input) {
             case "set_brightness":
                 cmd = { name: "brightness", value: input.brightness || 50 };
                 break;
-            case "set_color":
+            case "set_color": {
                 const colorName = input.color?.toLowerCase();
                 const rgb = COLOR_MAP[colorName] || parseHexColor(input.color) || COLOR_MAP.white;
                 cmd = { name: "color", value: rgb };
                 break;
+            }
             default:
                 return { error: `Unknown action: ${input.action}` };
         }
@@ -159,7 +160,11 @@ async function executeGoveeControl(input) {
             })
         });
 
-        const result = await response.json();
+        // Report the real outcome: Sentinel shouldn't claim the lights changed if they didn't.
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { error: result.error?.message || result.error || `Govee control failed (HTTP ${response.status})` };
+        }
         return { success: true, action: input.action, device: device.deviceName };
     } catch (err) {
         console.error('Govee control error:', err);

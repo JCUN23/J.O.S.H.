@@ -303,7 +303,7 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
             const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
             description += ` Lights set to ${hexColor} (${lightResults.join(' + ')}).`;
           }
-        } catch (colorErr) {
+        } catch {
           description += ' Could not extract art color for lights.';
         }
       }

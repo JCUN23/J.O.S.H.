@@ -14,6 +14,8 @@ const TeslaWidget = ({ theme }) => {
         // Auto-refresh every 60 seconds
         const interval = setInterval(fetchVehicleData, 60000);
         return () => clearInterval(interval);
+        // Mount-only on purpose: helpers read the token from localStorage each call.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const checkConnection = async () => {

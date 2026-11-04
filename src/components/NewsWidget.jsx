@@ -35,6 +35,8 @@ const NewsWidget = ({ theme, setNewsIsOnline }) => {
             clearTimeout(startTimeout);
             clearInterval(interval);
         };
+        // Re-run only when the category changes; loadNews is recreated each render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedCategory]);
 
     // Auto-scroll effect

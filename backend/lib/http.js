@@ -9,7 +9,7 @@ function apiNotFound(req, res) {
 }
 
 // Last-resort error handler: consistent JSON, upstream status when it's an axios error.
-// eslint-disable-next-line no-unused-vars
+// Express identifies error middleware by its 4-arg signature, so `next` must stay.
 function errorHandler(err, req, res, next) {
   if (res.headersSent) return next(err);
   const upstream = err.response?.status;

@@ -112,7 +112,7 @@ router.get('/api/printer/status', async (req, res) => {
             endpoint: endpoint
           });
         }
-      } catch (err) {
+      } catch {
         // Try next endpoint
         continue;
       }

@@ -44,14 +44,16 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
         try {
             setLoading(true);
             const res = await fetch(`${BACKEND_URL}/api/govee/devices`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const json = await res.json();
             const list = json?.data?.devices || [];
             setDevices(list);
             setSelected(list[0] || null);
             setCaps(list[0] ? inferCapabilities(list[0]) : null);
             setGoveeIsConnected(true);
+            setError("");
         } catch {
-            setError("Failed to load Govee devices");
+            setError("Couldn't reach Govee. Check GOVEE_API_KEY in backend/.env, then refresh.");
             setGoveeIsConnected(false);
         } finally {
             setLoading(false);
@@ -126,7 +128,13 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
                 <Lightbulb className={`text-${theme}-400`} />
                 <h3 className={`text-lg font-semibold text-${theme}-400`}>GOVEE</h3>
             </div>
+            {error && (
+                <button onClick={loadDevices} className={`text-xs px-2 py-1 rounded border ${border} ${text}`}>
+                    Retry
+                </button>
+            )}
         </div>
+        {error && <div className="text-xs text-red-400 mb-2 px-4">{error}</div>}
         <div className={`p-4 grid grid-cols-3 gap-4 text-${theme}-300`}>
             {/* DEVICE LIST */}
             <div className="col-span-1 space-y-2 max-h-80 overflow-y-auto">
