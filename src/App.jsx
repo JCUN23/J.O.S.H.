@@ -130,6 +130,26 @@ const BatcomputerHub = () => {
     // Google's callback is handled by CalendarWidget; don't fall through into Spotify below.
     if (state === 'google_calendar') return;
 
+    // SmartThings OAuth: the server exchanges the code and keeps the login.
+    if (state === 'smartthings_auth') {
+      window.history.replaceState({}, "", "/");
+      // OAuth codes are single-use; StrictMode runs effects twice in dev.
+      if (sessionStorage.getItem("smartthings_code_exchanged") === code) return;
+      sessionStorage.setItem("smartthings_code_exchanged", code);
+
+      fetch(`${BACKEND_URL}/auth/smartthings/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          window.dispatchEvent(new Event('sentinel:smartthings-connected'));
+        })
+        .catch(err => console.error("SmartThings auth failed:", err));
+      return;
+    }
+
     // Handle Tesla OAuth
     if (state === 'tesla_auth') {
       if (sessionStorage.getItem("tesla_code_exchanged")) {

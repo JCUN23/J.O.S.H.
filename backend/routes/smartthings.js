@@ -2,7 +2,8 @@
 const express = require('express');
 const axios = require('axios');
 const { FRONTEND_URL } = require('../lib/config');
-const { SMARTTHINGS_CLIENT_ID, SMARTTHINGS_CLIENT_SECRET, SMARTTHINGS_PAT, SMARTTHINGS_BASE_URL, stState, getSmartThingsToken } = require('../lib/smartthings');
+const { SMARTTHINGS_CLIENT_ID, SMARTTHINGS_CLIENT_SECRET, SMARTTHINGS_PAT, SMARTTHINGS_BASE_URL, stState, getSmartThingsToken, tokenRequest } = require('../lib/smartthings');
+const { toStored } = require('../lib/oauth');
 
 const router = express.Router();
 
@@ -36,30 +37,17 @@ router.post('/auth/smartthings/token', async (req, res) => {
       return res.status(500).json({ error: 'SmartThings OAuth not configured' });
     }
 
-    const response = await axios.post('https://auth-global.api.smartthings.com/oauth/token',
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: SMARTTHINGS_CLIENT_ID,
-        client_secret: SMARTTHINGS_CLIENT_SECRET,
-        code: code,
-        redirect_uri: FRONTEND_URL
-      }),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    const data = await tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: FRONTEND_URL });
 
-    // Store tokens server-side
-    stState.tokens = {
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token,
-      expires_at: Date.now() + (response.data.expires_in * 1000)
-    };
+    // Stored server-side (survives restarts, shared by every device)
+    stState.tokens = toStored(data);
 
     console.log('SmartThings OAuth successful, tokens stored');
 
     res.json({
       success: true,
-      expires_in: response.data.expires_in,
-      scope: response.data.scope
+      expires_in: data.expires_in,
+      scope: data.scope
     });
   } catch (error) {
     console.error('SmartThings token exchange error:', error.response?.data || error.message);

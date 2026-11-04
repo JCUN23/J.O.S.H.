@@ -93,7 +93,7 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
             }
 
             if (data.needsAuth) {
-                setError('SmartThings not connected. Add SMARTTHINGS_TOKEN to backend/.env');
+                setError('SmartThings sign-in expired or missing. Connect to continue.');
                 setLoading(false);
                 return;
             }
@@ -134,7 +134,7 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
             setLoading(false);
         } catch (err) {
             console.error('Failed to load SmartThings devices:', err);
-            setError('Failed to connect. Add SMARTTHINGS_TOKEN to backend/.env');
+            setError("Couldn't reach Sentinel's backend. Check that it's running, then retry.");
             setLoading(false);
             setSmartThingsIsConnected(false);
         }
@@ -146,6 +146,13 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
         loadDevices();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Reload after the OAuth callback (handled in App) stores a fresh login.
+    useEffect(() => {
+        const onConnected = () => loadDevices(true);
+        window.addEventListener('sentinel:smartthings-connected', onConnected);
+        return () => window.removeEventListener('sentinel:smartthings-connected', onConnected);
+    }, [loadDevices]);
 
     useEffect(() => {
         // Only fetch statuses once per mount
@@ -311,21 +318,24 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
                 </div>
                 {!rateLimited && (
                     <>
-                        <button
-                            onClick={loadDevices}
-                            className={`flex items-center justify-center gap-2 bg-${theme}-700 hover:bg-${theme}-600 text-white px-4 py-2 rounded transition-all font-mono text-sm`}
-                        >
-                            <RefreshCw size={16} />
-                            Retry
-                        </button>
-                        <div className={`mt-4 text-xs text-${theme}-700`}>
-                            <p className="mb-2">To connect SmartThings:</p>
-                            <ol className="list-decimal list-inside space-y-1">
-                                <li>Generate token at account.smartthings.com/tokens</li>
-                                <li>Add SMARTTHINGS_TOKEN to backend/.env</li>
-                                <li>Restart backend server</li>
-                            </ol>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => { window.location.href = `${BACKEND_URL}/auth/smartthings`; }}
+                                className={`flex items-center justify-center gap-2 bg-${theme}-700 hover:bg-${theme}-600 text-white px-4 py-2 rounded transition-all font-mono text-sm`}
+                            >
+                                Connect SmartThings
+                            </button>
+                            <button
+                                onClick={() => loadDevices(true)}
+                                className={`flex items-center justify-center gap-2 border border-${theme}-700 text-${theme}-400 px-4 py-2 rounded transition-all font-mono text-sm`}
+                            >
+                                <RefreshCw size={16} />
+                                Retry
+                            </button>
                         </div>
+                        <p className={`mt-4 text-xs text-${theme}-700`}>
+                            Sign in once from any device. Sentinel keeps the login and refreshes it.
+                        </p>
                     </>
                 )}
             </div>

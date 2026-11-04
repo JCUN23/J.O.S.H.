@@ -10,6 +10,7 @@ const SMARTTHINGS_BASE_URL = 'https://api.smartthings.com/v1';
 // Persisted via the token store, so logins survive restarts/deploys. Getter/setter
 // keeps every existing `stState.tokens.x` / `stState.tokens = {...}` call site working.
 const store = require('./tokenStore');
+const { getValidToken, toStored } = require('./oauth');
 const EMPTY = Object.freeze({ access_token: null, refresh_token: null, expires_at: null });
 const stState = {
   get tokens() {
@@ -21,52 +22,43 @@ const stState = {
   },
 };
 
-// Helper to get valid SmartThings token
+// SmartThings' token endpoint is called with client credentials as Basic auth
+// *and* in the form body (matches SmartThings' own working examples).
+const basicAuth = () => 'Basic ' + Buffer.from(`${SMARTTHINGS_CLIENT_ID}:${SMARTTHINGS_CLIENT_SECRET}`).toString('base64');
+const TOKEN_URL = 'https://auth-global.api.smartthings.com/oauth/token';
+
+async function tokenRequest(params) {
+  const { data } = await axios.post(TOKEN_URL,
+    new URLSearchParams({ client_id: SMARTTHINGS_CLIENT_ID, client_secret: SMARTTHINGS_CLIENT_SECRET, ...params }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuth() } }
+  );
+  return data;
+}
+
+// Access tokens last ~24h; refresh tokens ~30 days and rotate on use, so refreshes
+// go through the shared single-flight helper (concurrent refreshes would race).
+const refreshWithClient = (refresh_token) => tokenRequest({ grant_type: 'refresh_token', refresh_token });
+
 async function getSmartThingsToken() {
-  // If we have OAuth tokens, use them
-  if (stState.tokens.access_token) {
-    // Check if token is expired (with 5 min buffer)
-    if (stState.tokens.expires_at && Date.now() < stState.tokens.expires_at - 300000) {
-      return stState.tokens.access_token;
-    }
-    // Try to refresh if we have a refresh token
-    if (stState.tokens.refresh_token) {
-      try {
-        const refreshed = await refreshSmartThingsToken();
-        if (refreshed) return stState.tokens.access_token;
-      } catch (err) {
-        console.error('SmartThings token refresh failed:', err);
-      }
+  if (SMARTTHINGS_CLIENT_ID && SMARTTHINGS_CLIENT_SECRET) {
+    try {
+      const t = await getValidToken('smartthings', refreshWithClient);
+      if (t?.access_token) return t.access_token;
+    } catch (err) {
+      console.error('SmartThings token refresh failed:', err.response?.data || err.message);
     }
   }
-  // Fall back to PAT if available
+  // Legacy fallback. PATs issued since Dec 2024 expire after 24h, so this is
+  // only useful for quick tests; the OAuth login above is the real path.
   return SMARTTHINGS_PAT || null;
 }
 
-// Refresh SmartThings token
+// Kept for callers that force a refresh. Returns true on success.
 async function refreshSmartThingsToken() {
-  if (!stState.tokens.refresh_token || !SMARTTHINGS_CLIENT_ID || !SMARTTHINGS_CLIENT_SECRET) {
-    return false;
-  }
-
+  const t = stState.tokens;
+  if (!t.refresh_token) return false;
   try {
-    const response = await axios.post('https://auth-global.api.smartthings.com/oauth/token',
-      new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: SMARTTHINGS_CLIENT_ID,
-        client_secret: SMARTTHINGS_CLIENT_SECRET,
-        refresh_token: stState.tokens.refresh_token
-      }),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    stState.tokens = {
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token || stState.tokens.refresh_token,
-      expires_at: Date.now() + (response.data.expires_in * 1000)
-    };
-
-    console.log('SmartThings token refreshed successfully');
+    store.set('smartthings', toStored(await refreshWithClient(t.refresh_token), t.refresh_token));
     return true;
   } catch (error) {
     console.error('SmartThings refresh error:', error.response?.data || error.message);
@@ -74,4 +66,4 @@ async function refreshSmartThingsToken() {
   }
 }
 
-module.exports = { SMARTTHINGS_CLIENT_ID, SMARTTHINGS_CLIENT_SECRET, SMARTTHINGS_PAT, SMARTTHINGS_BASE_URL, stState, getSmartThingsToken, refreshSmartThingsToken };
+module.exports = { tokenRequest, SMARTTHINGS_CLIENT_ID, SMARTTHINGS_CLIENT_SECRET, SMARTTHINGS_PAT, SMARTTHINGS_BASE_URL, stState, getSmartThingsToken, refreshSmartThingsToken };
