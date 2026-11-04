@@ -1,8 +1,8 @@
-import { Lock, Settings } from 'lucide-react';
+import { Lock, Settings, Sun, Moon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 // Header Component
-const Header = ({ time, setTheme, theme, setIsLocked, widgetVisibility, toggleWidgetVisibility }) => {
+const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVisibility, toggleWidgetVisibility }) => {
     const [showWidgetMenu, setShowWidgetMenu] = useState(false);
     const dropdownRef = useRef(null);
     const registeredFaces = JSON.parse(localStorage.getItem('registered_faces') || '[]');
@@ -111,6 +111,14 @@ const Header = ({ time, setTheme, theme, setIsLocked, widgetVisibility, toggleWi
             </button>
             <div className={`items-left pr-4 border-r ${border} mr-4 `}>
                 <button className={`p-4 border ${border} rounded text-${theme}-400`} onClick={updateTheme}>Color</button>
+                <button
+                    onClick={toggleMode}
+                    className={`ml-2 p-4 border ${border} rounded text-${theme}-400`}
+                    aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                    title={mode === 'dark' ? 'Light mode' : 'Dark mode'}
+                >
+                    {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                </button>
             </div>
             <div>
                 <div className={`hud-clock text-2xl text-${theme}-300`}>

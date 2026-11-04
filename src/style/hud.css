@@ -169,3 +169,36 @@ body { background: #020407; }
   .hud-panel, .hud-panel::before, .hud-panel::after,
   .hud-header, .hud-stack > * { animation: none; }
 }
+
+/* ---------- Light mode ----------
+   Widgets hardcode dark Tailwind colors, so light mode flips lightness and keeps
+   hue (invert + 180deg hue-rotate): black -> paper, cyan stays cyan.
+   Real photos/video get flipped back so they look normal.
+   A token-based light theme would mean touching every widget; this is the
+   zero-churn version. */
+.hud-root[data-mode="light"] {
+  filter: invert(1) hue-rotate(180deg);
+}
+/* Lock screen uses Tailwind's blur-xl, which sets the same `filter` property;
+   combine them or the lock blur would silently disappear in light mode. */
+.hud-root[data-mode="light"].blur-xl {
+  filter: invert(1) hue-rotate(180deg) blur(24px);
+}
+.hud-root[data-mode="light"] img,
+.hud-root[data-mode="light"] video,
+.hud-root[data-mode="light"] canvas,
+.hud-root[data-mode="light"] picture {
+  filter: invert(1) hue-rotate(180deg);
+}
+/* Glows read as smudges on paper: keep them faint in light mode */
+.hud-root[data-mode="light"] .hud-wordmark { text-shadow: 0 0 1px rgb(var(--hud) / 0.6); }
+.hud-root[data-mode="light"] .hud-clock,
+.hud-root[data-mode="light"] .hud-panel h3,
+.hud-root[data-mode="light"] .hud-panel .text-4xl,
+.hud-root[data-mode="light"] .hud-panel .text-5xl,
+.hud-root[data-mode="light"] .hud-panel .text-6xl { text-shadow: none; }
+.hud-root[data-mode="light"] .hud-panel::before,
+.hud-root[data-mode="light"] .hud-panel::after { filter: none; }
+
+.hud-root { transition: filter 260ms ease; }
+@media (prefers-reduced-motion: reduce) { .hud-root { transition: none; } }

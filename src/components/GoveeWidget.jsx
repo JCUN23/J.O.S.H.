@@ -124,7 +124,7 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
         <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
                 <Lightbulb className={`text-${theme}-400`} />
-                <h3 className={`text-lg font-semibold text-${theme}-400`}>Govee</h3>
+                <h3 className={`text-lg font-semibold text-${theme}-400`}>GOVEE</h3>
             </div>
         </div>
         <div className={`p-4 grid grid-cols-3 gap-4 text-${theme}-300`}>

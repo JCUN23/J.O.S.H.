@@ -54,6 +54,15 @@ const BatcomputerHub = () => {
   const { profileData } = useProfile();
 
   const [theme, setTheme] = useState(profileData?.theme || "cyan");
+  // Light/dark is per device (the wall panel and laptop can differ), so localStorage, not profile.
+  const [mode, setMode] = useState(() => {
+    try { return localStorage.getItem('hud_mode') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
+  });
+  const toggleMode = () => setMode((m) => {
+    const next = m === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('hud_mode', next); } catch { /* storage unavailable; still toggles */ }
+    return next;
+  });
 
   // Face Lock State
   const [isLocked, setIsLocked] = useState(false); // Always start unlocked
@@ -851,13 +860,15 @@ const BatcomputerHub = () => {
         onUnlock={() => setIsLocked(false)}
         theme={theme}
       />
-      <div data-hud={theme} className={`hud-root min-h-screen font-mono p-4 border border border-${theme}-800 ${isLocked ? 'blur-xl pointer-events-none' : ''}`}
+      <div data-hud={theme} data-mode={mode} className={`hud-root min-h-screen font-mono p-4 border border border-${theme}-800 ${isLocked ? 'blur-xl pointer-events-none' : ''}`}
         >
         <div className="max-w-[95%] mx-auto">
           <Header
             time={time}
             setTheme={setTheme}
             theme={theme}
+            mode={mode}
+            toggleMode={toggleMode}
             setIsLocked={setIsLocked}
             widgetVisibility={widgetVisibility}
             toggleWidgetVisibility={toggleWidgetVisibility}
