@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, act, fireEvent } from '@testing-library/react';
 
+vi.mock('./IdleCave', () => ({ default: () => null }));
 vi.mock('../utils/faceApiLoader', () => ({ loadFaceDetector: () => Promise.reject(new Error('no camera in tests')) }));
 import IdleMode from './IdleMode';
 import { WAKE_EVENT } from '../utils/idlePrefs';

@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadFaceDetector } from '../utils/faceApiLoader';
 import { WAKE_EVENT } from '../utils/idlePrefs';
+import IdleCave from './IdleCave';
+
+const TICKS = Array.from({ length: 60 }, (_, i) => i);
 
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
 const wake = () => window.dispatchEvent(new Event(WAKE_EVENT));
 
-// After `minutes` without a touch, the panel fades to a dim clock over a slow aurora.
+// After `minutes` without a touch, the panel fades to a dim clock in an animated batcave.
 // Wakes on touch, on the wake word (WAKE_EVENT), or when the camera sees any face.
 // The clock drifts a little every minute so nothing sits still on the AMOLED screen.
 // The parent remounts this (key) when it pauses, so a stale idle state never reappears.
@@ -83,12 +86,28 @@ const IdleMode = ({ enabled, paused, minutes = 3, theme }) => {
             onPointerDown={wake}
             className="idle-root fixed inset-0 z-[200] bg-black select-none overflow-hidden"
         >
-            <div className="idle-aurora" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ transform: `translate(${offset.x}px, ${offset.y}px)`, transition: 'transform 4s ease-in-out' }}>
-                <div className="idle-clock tabular-nums">{time}</div>
-                <div className="idle-date">{date}</div>
-                {note && <div className="mt-10 text-xs text-gray-600 tracking-widest uppercase">{note}</div>}
+            <IdleCave />
+            <div className="absolute inset-0 flex items-center justify-center" style={{ transform: `translate(${offset.x}px, ${offset.y}px)`, transition: 'transform 4s ease-in-out' }}>
+                <div className="idle-dial">
+                    <svg className="idle-ring" viewBox="0 0 200 200" aria-hidden="true">
+                        <circle cx="100" cy="100" r="96" className="idle-ring-outer" />
+                        <g className="idle-ring-ticks">
+                            {TICKS.map((i) => (
+                                <line key={i} x1="100" y1={i % 5 ? 7 : 4} x2="100" y2="10" transform={`rotate(${i * 6} 100 100)`}
+                                    className={i % 5 ? 'idle-tick' : 'idle-tick-major'} />
+                            ))}
+                        </g>
+                        <circle cx="100" cy="100" r="88" className="idle-ring-dash" />
+                        <circle cx="100" cy="100" r="92" className="idle-ring-sweep" pathLength="100" />
+                    </svg>
+                    <div className="idle-face">
+                        <div className="idle-clock tabular-nums">{time}</div>
+                        <div className="idle-date">{date}</div>
+                        <div className="idle-status">SENTINEL // STANDBY</div>
+                    </div>
+                </div>
             </div>
+            {note && <div className="absolute bottom-6 inset-x-0 text-center text-[10px] text-gray-600 tracking-[0.3em] uppercase">{note}</div>}
             <video ref={videoRef} muted playsInline className="absolute w-px h-px opacity-0 pointer-events-none" />
         </div>
     );
