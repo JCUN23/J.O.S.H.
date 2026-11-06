@@ -8,7 +8,7 @@ const WIDGET_KEYS = [
     'weather', 'sports', 'calendar', 'quickcontrols',
     'spotify', 'news', 'smartthings', 'govee', 'bluetooth',
     'crealityprinter', 'phillips_hue', 'arduino',   // 'arduino' slot holds the Tesla widget
-    'scenes', 'activity'
+    'scenes', 'activity', 'frametv'
 ];
 
 const DraggableGrid = ({ children, theme = 'cyan' }) => {

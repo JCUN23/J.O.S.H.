@@ -9,6 +9,7 @@ import QuickControls from './components/QuickControls';
 import SystemStatus from './components/SystemStatus';
 import ScenesWidget from './components/ScenesWidget';
 import ActivityWidget from './components/ActivityWidget';
+import FrameTvWidget from './components/FrameTvWidget';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
 import FaceLock from './components/AuthAndProfiles/FaceLock';
@@ -104,6 +105,7 @@ const BatcomputerHub = () => {
       tesla: true,
       scenes: true,
       activity: true,
+      frametv: true,
     };
     // Merge so widgets added after a device saved its settings still show up
     // (saved settings used to replace the defaults wholesale -> new widgets hidden).
@@ -978,6 +980,7 @@ const BatcomputerHub = () => {
             {/* New widgets go at the END: DraggableGrid maps children to WIDGET_KEYS by position */}
             {widgetVisibility.scenes && <ScenesWidget theme={theme} />}
             {widgetVisibility.activity && <ActivityWidget theme={theme} />}
+            {widgetVisibility.frametv && <FrameTvWidget theme={theme} />}
           </DraggableGrid>
         </div>
 

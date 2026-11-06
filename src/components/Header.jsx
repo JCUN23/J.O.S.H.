@@ -61,7 +61,8 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
         hue: 'Philips Hue',
         tesla: 'Tesla',
         scenes: 'Scenes & Rules',
-        activity: 'Activity'
+        activity: 'Activity',
+        frametv: 'Frame TV'
     };
 
     return (

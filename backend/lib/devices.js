@@ -83,7 +83,14 @@ async function frameTvs() {
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // { power: true|false, artMode: true|false, home: true }
-async function tvApply({ power, artMode, home }) {
+// Local network control (lib/frameTv.js) when FRAME_TVS is set; SmartThings cloud otherwise.
+async function tvApply(opts) {
+  const frame = require('./frameTv');
+  if (frame.configured().length) return frame.apply(opts);
+  return smartThingsTvApply(opts);
+}
+
+async function smartThingsTvApply({ power, artMode, home }) {
   const { token, tvs, send } = await frameTvs();
   if (!token) return 'TV: SmartThings not connected';
   if (!tvs.length) return 'TV: no Frame TV found';
