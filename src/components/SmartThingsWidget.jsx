@@ -37,6 +37,7 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
     const [retryIn, setRetryIn] = useState(0);
     const [expandedDevices, setExpandedDevices] = useState({});
     const [showAudio, setShowAudio] = useState(true);
+    const [commandError, setCommandError] = useState('');
 
     // Collapsible sections
     const [showOther, setShowOther] = useState(true);
@@ -209,7 +210,8 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
 
         try {
             setSending(true);
-            await fetch(`${BACKEND_URL}/api/smartthings/devices/${deviceId}/commands`, {
+            setCommandError('');
+            const res = await fetch(`${BACKEND_URL}/api/smartthings/devices/${deviceId}/commands`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -220,11 +222,17 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
                     }]
                 })
             });
+            // SmartThings rejects unsupported commands with 4xx; say so instead of failing silently.
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                const detail = body.error?.error?.message || body.error?.message || `HTTP ${res.status}`;
+                setCommandError(`${capability}.${command} failed: ${detail}`);
+            }
 
             setTimeout(() => setSending(false), 1500);
         } catch (err) {
             console.error('Command error:', err);
-            setError('Failed to send command');
+            setCommandError("Couldn't reach Sentinel's backend to send that command");
             setSending(false);
         }
     };
@@ -381,6 +389,16 @@ const SmartThingsWidget = ({ theme, setSmartThingsIsConnected }) => {
                     <RefreshCw size={16} className={rateLimited ? 'animate-spin' : ''} />
                 </button>
             </div>
+
+            {commandError && (
+                <button
+                    onClick={() => setCommandError('')}
+                    className="mb-3 text-left bg-red-900/30 border border-red-700 text-red-400 rounded p-2 text-xs"
+                    title="Dismiss"
+                >
+                    {commandError}
+                </button>
+            )}
 
             <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
                 {/* ALL FRAME TVS - Each gets full controls */}

@@ -4,6 +4,8 @@ const axios = require('axios');
 const { FRONTEND_URL } = require('../lib/config');
 const { SMARTTHINGS_CLIENT_ID, SMARTTHINGS_CLIENT_SECRET, SMARTTHINGS_PAT, SMARTTHINGS_BASE_URL, stState, getSmartThingsToken, tokenRequest } = require('../lib/smartthings');
 const { toStored } = require('../lib/oauth');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -15,7 +17,9 @@ router.get('/auth/smartthings', (req, res) => {
     return res.status(500).json({ error: 'SmartThings client ID not configured' });
   }
 
-  const scopes = 'r:devices:* x:devices:* r:scenes:* x:scenes:*';
+  // Must be a subset of the scopes registered on the OAuth-In app, or authorize fails.
+  // Scenes scopes were dropped: nothing uses them and many apps don't register them.
+  const scopes = process.env.SMARTTHINGS_SCOPES || 'r:devices:* x:devices:*';
 
   const authUrl = `https://auth-global.api.smartthings.com/oauth/authorize?${new URLSearchParams({
     client_id: SMARTTHINGS_CLIENT_ID,
@@ -156,6 +160,46 @@ router.post('/api/smartthings/devices/:deviceId/commands', async (req, res) => {
     const errorData = error.response?.data || { message: error.message };
     console.error(`SmartThings command error [${status}]:`, JSON.stringify(errorData, null, 2));
     res.status(status).json({ error: errorData, httpStatus: status });
+  }
+});
+
+// What each Samsung TV actually supports (capabilities, disabled ones, model, current
+// status). Frame support varies by model year, so TV controls are built from this
+// rather than guessed. Also written to data/frame-report.json (no tokens in it).
+router.get('/api/smartthings/frame-report', async (req, res) => {
+  try {
+    const token = await getSmartThingsToken();
+    if (!token) return res.status(401).json({ error: 'SmartThings not connected', needsAuth: true });
+    const headers = { Authorization: `Bearer ${token}` };
+    const { data } = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, { headers });
+    const isTv = (d) => /frame|tv/i.test(d.label || '') ||
+      (d.components || []).some((c) => (c.capabilities || []).some((cap) => cap.id.startsWith('samsungvd.')));
+    const tvs = [];
+    for (const d of (data.items || []).filter(isTv)) {
+      let status = null;
+      try { status = (await axios.get(`${SMARTTHINGS_BASE_URL}/devices/${d.deviceId}/status`, { headers })).data; }
+      catch (err) { status = { error: err.response?.status || err.message }; }
+      const main = status?.components?.main || {};
+      tvs.push({
+        label: d.label, deviceId: d.deviceId, name: d.name,
+        manufacturer: d.manufacturerName, model: d.ocf?.modelNumber || null,
+        deviceType: d.deviceTypeName || d.type, presentationId: d.presentationId,
+        components: (d.components || []).map((c) => ({ id: c.id, capabilities: (c.capabilities || []).map((x) => x.id) })),
+        disabledCapabilities: main['custom.disabledCapabilities']?.disabledCapabilities?.value || [],
+        status: status?.error ? status : Object.fromEntries(Object.entries(main)
+          .filter(([k]) => /switch|ambient|art|mediaInputSource|audioVolume|tvChannel|picture/i.test(k))),
+      });
+    }
+    const report = { generatedAt: new Date().toISOString(), count: tvs.length, tvs };
+    try {
+      const file = path.join(__dirname, '..', 'data', 'frame-report.json');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(report, null, 2), { mode: 0o600 });
+    } catch (err) { console.warn('frame-report not saved:', err.message); }
+    res.json(report);
+  } catch (error) {
+    const status = error.response?.status || 500;
+    res.status(status).json({ error: error.response?.data || error.message, needsAuth: status === 401 });
   }
 });
 
