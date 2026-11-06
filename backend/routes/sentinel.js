@@ -1,7 +1,22 @@
 // Sentinel AI agent loop (Groq)
 const express = require('express');
 const axios = require('axios');
-const { GROQ_API_KEY } = require('../lib/config');
+const { GROQ_API_KEY, GROQ_MODEL, GROQ_REASONING_EFFORT, GROQ_MAX_TOKENS } = require('../lib/config');
+
+// Shared request settings for every Groq call in the loop
+const groqParams = () => ({
+  model: GROQ_MODEL,
+  max_tokens: GROQ_MAX_TOKENS,
+  ...(GROQ_REASONING_EFFORT ? { reasoning_effort: GROQ_REASONING_EFFORT } : {}),
+});
+
+// Reasoning models attach extra fields (e.g. `reasoning`) to replies. Send back only
+// what the chat API accepts as conversation history.
+const historyMessage = (m) => ({
+  role: m.role,
+  content: m.content ?? '',
+  ...(m.tool_calls?.length ? { tool_calls: m.tool_calls } : {}),
+});
 const { SENTINEL_TOOLS } = require('../lib/sentinel/tools');
 const { SENTINEL_SYSTEM_PROMPT } = require('../lib/sentinel/prompt');
 const { executeTool } = require('../lib/sentinel/executeTool');
@@ -54,12 +69,10 @@ router.post('/api/sentinel/chat', async (req, res) => {
         const response = await axios.post(
           'https://api.groq.com/openai/v1/chat/completions',
           {
-            model: 'llama-3.3-70b-versatile',
+            ...groqParams(),
             messages,
             tools: SENTINEL_TOOLS,
             tool_choice: 'auto',
-            max_tokens: 300,
-            temperature: 0.7
           },
           {
             headers: {
@@ -76,7 +89,7 @@ router.post('/api/sentinel/chat', async (req, res) => {
           console.log('[Sentinel] tool_use_failed — retrying without tools');
           const fallback = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
-            { model: 'llama-3.3-70b-versatile', messages, max_tokens: 300, temperature: 0.7 },
+            { ...groqParams(), messages },
             { headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 15000 }
           );
           choice = fallback.data.choices[0];
@@ -91,7 +104,7 @@ router.post('/api/sentinel/chat', async (req, res) => {
       // Step 2: Append the assistant's message to the conversation
       // IMPORTANT: You must include the full assistant message (with tool_calls) so the
       // model sees its own previous request when it gets the tool results back.
-      messages.push(assistantMessage);
+      messages.push(historyMessage(assistantMessage));
 
       // Step 3: Check finish_reason
       if (choice.finish_reason === 'stop' || !assistantMessage.tool_calls?.length) {
@@ -149,8 +162,11 @@ router.post('/api/sentinel/chat', async (req, res) => {
     });
 
   } catch (error) {
+    const detail = error.response?.data?.error?.message || error.message;
     console.error('Sentinel error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'AI processing failed' });
+    // 502: the upstream AI failed (bad key, retired model, outage), not our server.
+    // Pass Groq's reason along so failures are diagnosable from the panel/console.
+    res.status(502).json({ error: 'AI processing failed', detail, model: GROQ_MODEL });
   }
 });
 

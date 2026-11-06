@@ -14,6 +14,7 @@ import NewsWidget from './components/NewsWidget';
 import { exchangeCodeForToken } from "./components/Spotify/spotifyAuth";
 import { startSpotifyAuth, startSpotifyTokenSync } from "./components/Spotify/spotifyAuth";
 import { migrateLegacyTokens } from "./utils/authApi";
+import { isWakeEcho } from "./utils/wakeWord";
 import { getCachedFaces, syncFaces, FACES_CHANGED } from "./utils/faceStore";
 import { ProfileProvider } from './components/AuthAndProfiles/ProfileContext';
 import { useProfile } from './components/AuthAndProfiles/ProfileContext';
@@ -232,6 +233,11 @@ const BatcomputerHub = () => {
   const isListeningRef = useRef(false); // Track if we should process results
   const audioRef = useRef(null);
   const awaitingCommandRef = useRef(false); // Track wake word state
+  // Android's recognizer often re-sends a final result for the wake word (or a misheard
+  // fragment of it) right after detection. Remember when/what woke us so that echo isn't
+  // processed as the command before the user has said anything.
+  const wakeAtRef = useRef(0);
+  const wakeTranscriptRef = useRef('');
   const commandTimeoutRef = useRef(null); // Timeout for command after wake word
   const wakeWordEnabledRef = useRef(wakeWordEnabled); // Ref to track wake word setting
   const processingRef = useRef(false); // Track if currently processing a command
@@ -584,6 +590,11 @@ const BatcomputerHub = () => {
               }, 6000);
             }
 
+            if (isFinal && isWakeEcho(fullTranscript, wakeTranscriptRef.current, wakeAtRef.current)) {
+              console.log('[Sentinel] Ignoring wake-word echo:', fullTranscript);
+              return;
+            }
+
             if (isFinal && fullTranscript.trim()) {
               console.log('[Sentinel] Processing awaited command:', fullTranscript);
               // Clear timeout since we're processing now
@@ -601,6 +612,8 @@ const BatcomputerHub = () => {
           // Wake word detected but no command yet
           if (!awaitingCommandRef.current) {
             console.log('[Sentinel] Wake word detected, awaiting command...');
+            wakeAtRef.current = Date.now();
+            wakeTranscriptRef.current = fullTranscript;
             playWakeSound();
             setAwaitingCommand(true);
             awaitingCommandRef.current = true;

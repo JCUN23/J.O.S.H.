@@ -369,12 +369,9 @@ async function askGroq(input, getCalendarEvents) {
         });
 
         if (!response.ok) {
-            const data = await response.json();
-            if (data.needsKey) {
-                console.log('Groq API key not configured');
-                return null;
-            }
-            return null;
+            const data = await response.json().catch(() => ({}));
+            console.error('[Sentinel] AI request failed:', response.status, data.detail || data.error || '', data.model ? `(model: ${data.model})` : '');
+            return { response: "My AI service isn't responding right now. Local commands like lights and music still work.", musicPlaying: false };
         }
 
         const data = await response.json();
