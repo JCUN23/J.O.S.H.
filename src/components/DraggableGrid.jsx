@@ -45,10 +45,20 @@ const DraggableGrid = ({ children, theme = 'cyan', editMode: editModeProp, onEdi
             el.style.height = `${Math.max(avail, MIN_ROW * 2 + 12)}px`;
         };
         fit();
+        // Start on the middle columns so there's something to swipe to on both sides.
+        // Snapped to a column boundary; runs once after the first layout.
+        const center = requestAnimationFrame(() => {
+            if (!isWide()) return;
+            const max = el.scrollWidth - el.clientWidth;
+            const first = el.firstElementChild;
+            if (max <= 0 || !first) return;
+            const col = first.getBoundingClientRect().width + parseFloat(getComputedStyle(el).columnGap || 0);
+            el.scrollLeft = Math.min(max, Math.round(max / 2 / col) * col);
+        });
         const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
         ro?.observe(document.body);
         window.addEventListener('resize', fit);
-        return () => { ro?.disconnect(); window.removeEventListener('resize', fit); };
+        return () => { cancelAnimationFrame(center); ro?.disconnect(); window.removeEventListener('resize', fit); };
     }, []);
 
     // Mouse wheel scrolls the grid sideways (laptop), unless a widget under the pointer scrolls itself.
