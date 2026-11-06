@@ -63,6 +63,7 @@ const BatcomputerHub = () => {
   });
   const [awaitingCommand, setAwaitingCommand] = useState(false);
   const [idleEnabled, setIdleEnabledState] = useState(getIdleEnabled);   // per device
+  const [layoutEditing, setLayoutEditing] = useState(false);
   const toggleIdle = () => { const next = !idleEnabled; setIdleEnabled(next); setIdleEnabledState(next); };
   const [wakeWordActive, setWakeWordActive] = useState(false); // Is always-on listening active?
 
@@ -952,10 +953,11 @@ const BatcomputerHub = () => {
             toggleWidgetVisibility={toggleWidgetVisibility}
             idleEnabled={idleEnabled}
             toggleIdle={toggleIdle}
+            onEditLayout={() => setLayoutEditing(true)}
           />
 
           {/* Fixed Top Section - Always visible */}
-          <div className="hud-stack mb-4 space-y-4">
+          <div className="hud-stack mb-4 space-y-4 lg:mb-3 lg:space-y-3">
             <SystemStatus theme={theme} isSpotifyConnected={token} isNewsConnected={isNewsOnline} isGoveeConnected={goveeIsConnected} isSmartThingsConnected={smartThingsIsConnected} isHueConnected={hueIsConnected} />
             {quoteTab}
             <VoiceAssistant
@@ -973,7 +975,7 @@ const BatcomputerHub = () => {
             />
           </div>
 
-          <DraggableGrid theme={theme}>
+          <DraggableGrid theme={theme} editMode={layoutEditing} onEditModeChange={setLayoutEditing}>
             {widgetVisibility.weather && <WeatherWidget theme={theme} />}
             {widgetVisibility.sports && <SportsWidget theme={theme} />}
             {widgetVisibility.calendar && <CalendarWidget theme={theme} />}

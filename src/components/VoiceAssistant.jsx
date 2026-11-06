@@ -136,7 +136,7 @@ const VoiceAssistant = ({
             )}
 
             {!transcript && !response && (
-                <div className={`text-center text-${theme}-700 text-sm`}>
+                <div className={`text-center text-${theme}-700 text-sm lg:hidden`}>
                     {wakeWordEnabled ? (
                         <>Say <span className="font-bold">"Sentinel"</span> followed by your command, or click the mic button to speak directly.</>
                     ) : (

@@ -1,8 +1,20 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Move, Lock, GripVertical } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 
 const STORAGE_KEY = 'batcomputer_widget_order';
+const WIDE = '(min-width: 1024px)';      // below this (phones), the old vertical stack
+const MIN_ROW = 240;   // px; shorter screens scroll a little instead of squashing
+const isWide = () => Boolean(window.matchMedia?.(WIDE).matches);                      // px; shorter screens scroll a little instead of squashing
+
+// Is there something between the wheel target and the grid that scrolls vertically itself?
+function innerScroller(el, stop) {
+    for (let n = el; n && n !== stop; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return true;
+    }
+    return false;
+}
 
 const WIDGET_KEYS = [
     'weather', 'sports', 'calendar', 'quickcontrols',
@@ -11,9 +23,41 @@ const WIDGET_KEYS = [
     'scenes', 'activity', 'frametv'
 ];
 
-const DraggableGrid = ({ children, theme = 'cyan' }) => {
-    const [editMode, setEditMode] = useState(false);
+// editMode/onEditModeChange: controlled from the Widgets menu (App). Without them the
+// grid shows its own Edit Layout button (tests, standalone use).
+const DraggableGrid = ({ children, theme = 'cyan', editMode: editModeProp, onEditModeChange }) => {
+    const [localEdit, setLocalEdit] = useState(false);
+    const controlled = typeof onEditModeChange === 'function';
+    const editMode = controlled ? Boolean(editModeProp) : localEdit;
+    const setEditMode = controlled ? onEditModeChange : setLocalEdit;
     const [draggedIndex, setDraggedIndex] = useState(null);
+    const gridRef = useRef(null);
+
+    // Two rows that exactly fill the screen below the top section. Sized on the DOM
+    // directly (no state) so resizes and rotation just re-measure.
+    useEffect(() => {
+        const el = gridRef.current;
+        if (!el) return undefined;
+        const fit = () => {
+            if (!isWide()) { el.style.height = ''; return; }
+            const top = el.getBoundingClientRect().top + window.scrollY;
+            const avail = window.innerHeight - top - 18;   // bottom padding + page border
+            el.style.height = `${Math.max(avail, MIN_ROW * 2 + 12)}px`;
+        };
+        fit();
+        const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+        ro?.observe(document.body);
+        window.addEventListener('resize', fit);
+        return () => { ro?.disconnect(); window.removeEventListener('resize', fit); };
+    }, []);
+
+    // Mouse wheel scrolls the grid sideways (laptop), unless a widget under the pointer scrolls itself.
+    const onWheel = (e) => {
+        const el = gridRef.current;
+        if (!el || !isWide() || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        if (innerScroller(e.target, el)) return;
+        el.scrollLeft += e.deltaY;
+    };
 
     // Load saved order or use default
     const [order, setOrder] = useState(() => {
@@ -79,8 +123,8 @@ const DraggableGrid = ({ children, theme = 'cyan' }) => {
 
     return (
         <div className="w-full">
-            {/* Edit Mode Toggle */}
-            <div className="flex justify-end mb-3 gap-2">
+            {/* Edit Mode Toggle (controlled mode: only while editing, entered from the Widgets menu) */}
+            {(!controlled || editMode) && <div className="flex justify-end mb-3 gap-2">
                 {editMode && (
                     <button
                         onClick={resetLayout}
@@ -98,12 +142,18 @@ const DraggableGrid = ({ children, theme = 'cyan' }) => {
                     }`}
                 >
                     {editMode ? <Lock size={14} /> : <Move size={14} />}
-                    {editMode ? 'Lock Layout' : 'Edit Layout'}
+                    {editMode ? (controlled ? 'Done' : 'Lock Layout') : 'Edit Layout'}
                 </button>
-            </div>
+            </div>}
 
-            {/* CSS Grid Layout */}
-            <div className="grid grid-cols-3 gap-x-3 gap-y-4">
+            {/* Wide screens: two rows, new widgets add columns to the right (scroll sideways).
+                Narrow screens: one column, vertical. */}
+            <div
+                ref={gridRef}
+                onWheel={onWheel}
+                data-testid="widget-grid"
+                className="hud-grid grid grid-cols-1 gap-4 lg:grid-cols-none lg:grid-rows-2 lg:grid-flow-col lg:gap-3 lg:overflow-x-auto lg:overflow-y-hidden lg:snap-x lg:snap-mandatory lg:pb-2"
+            >
                 {orderedWidgets.map(({ key, widget }, index) => (
                     <div
                         key={key}
@@ -113,7 +163,7 @@ const DraggableGrid = ({ children, theme = 'cyan' }) => {
                         onDragEnd={handleDragEnd}
                         style={{ '--i': index }}
                         className={`
-                            hud-panel rounded-lg
+                            hud-panel rounded-lg lg:snap-start lg:min-h-0
                             ${editMode ? 'ring-2 ring-yellow-500/50 cursor-move' : ''}
                             ${draggedIndex === index ? 'opacity-50' : ''}
                         `}
@@ -124,7 +174,7 @@ const DraggableGrid = ({ children, theme = 'cyan' }) => {
                                 <span>drag to reorder</span>
                             </div>
                         )}
-                        <div className={editMode ? 'h-[calc(100%-28px)]' : ''}>
+                        <div className="hud-cell">
                             {/* One widget crashing must not take down the whole panel */}
                             <ErrorBoundary name={key} theme={theme}>
                                 {widget}

@@ -1,9 +1,9 @@
-import { Lock, Settings, Sun, Moon } from 'lucide-react';
+import { Lock, Settings, Sun, Moon, Move } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { getCachedFaces } from '../utils/faceStore';
 
 // Header Component
-const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVisibility, toggleWidgetVisibility, idleEnabled, toggleIdle }) => {
+const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVisibility, toggleWidgetVisibility, idleEnabled, toggleIdle, onEditLayout }) => {
     const [showWidgetMenu, setShowWidgetMenu] = useState(false);
     const dropdownRef = useRef(null);
     const registeredFaces = getCachedFaces();
@@ -103,6 +103,16 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
                                 </label>
                             ))}
                         </div>
+                        {onEditLayout && (
+                            <div className={`p-2 border-t ${border}`}>
+                                <button
+                                    onClick={() => { onEditLayout(); setShowWidgetMenu(false); }}
+                                    className={`w-full flex items-center p-2 hover:bg-${theme}-900/30 rounded text-left text-${theme}-300 text-sm`}
+                                >
+                                    <Move size={16} className="mr-3" /> Rearrange widgets
+                                </button>
+                            </div>
+                        )}
                         {toggleIdle && (
                             <div className={`p-2 border-t ${border}`}>
                                 <label className={`flex items-center p-2 hover:bg-${theme}-900/30 rounded cursor-pointer`}>

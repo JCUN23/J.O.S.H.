@@ -239,3 +239,17 @@ body { background: #020407; }
   letter-spacing: 0.35em; text-transform: uppercase; color: rgb(var(--hud) / 0.45);
 }
 @media (prefers-reduced-motion: reduce) { .idle-aurora { animation: none; } }
+
+/* ---------- Horizontal widget grid (DraggableGrid, wide screens) ---------- */
+@media (min-width: 1024px) {
+  /* Three columns visible at a time; more columns scroll in from the right. */
+  .hud-grid { grid-auto-columns: max(360px, calc((100% - 1.5rem) / 3)); scrollbar-width: thin; scrollbar-color: rgb(var(--hud) / 0.35) transparent; }
+  .hud-grid::-webkit-scrollbar { height: 6px; }
+  .hud-grid::-webkit-scrollbar-thumb { background: rgb(var(--hud) / 0.35); border-radius: 3px; }
+  /* Each cell is a fixed size: the widget fills it and scrolls inside if it's taller. */
+  .hud-grid > .hud-panel { overflow: hidden; display: flex; flex-direction: column; }
+  .hud-grid .hud-cell { flex: 1 1 auto; min-height: 0; }
+  .hud-grid .hud-cell > :first-child { height: 100%; max-height: none; min-height: 0; overflow-y: auto; }
+  /* Flex-column widgets: only the growing part (flex-1, e.g. a list) may shrink to fit. */
+  .hud-grid .hud-cell > :first-child > :not(.flex-1) { flex-shrink: 0; }
+}
