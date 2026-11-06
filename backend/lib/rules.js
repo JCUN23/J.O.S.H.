@@ -3,7 +3,8 @@
 //   { type: 'sun', event: 'sunset'|'sunrise', offsetMin?, days? }  (needs HOME_LAT/HOME_LON)
 // Action: { scene: '<scene id>' } or { actions: [...] }.
 // Each rule fires at most once per day. A trigger missed by more than CATCH_UP_MS
-// (backend was down) is skipped rather than firing hours late.
+// (backend was down, or the host was asleep) is skipped rather than firing hours late,
+// and the skip is written to the activity log so it never fails silently.
 const path = require('path');
 const { createJsonStore } = require('./jsonStore');
 const { sunTimes } = require('./sun');
@@ -12,6 +13,7 @@ const { runActions } = require('./actions');
 const activity = require('./activity');
 
 const CATCH_UP_MS = 10 * 60 * 1000;
+const PAUSE_NOTICE_MS = 5 * 60 * 1000;      // scheduler gap worth reporting (host slept)
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Seeded DISABLED: rules act on the house unattended, so you opt in per rule.
@@ -67,12 +69,17 @@ function triggerTimeToday(rule, now) {
   return null;
 }
 
+const clock = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const duration = (ms) => {
+  const m = Math.round(ms / 60000);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+};
+
 // Human description for the UI: "11:30 PM, Sun–Thu", "Sunset (5:17 PM today)"
 function describeTrigger(rule, now = new Date()) {
   const t = rule.trigger || {};
   const days = Array.isArray(t.days) && t.days.length < 7
     ? `, ${t.days.map((d) => DAY_NAMES[d]).join(' ')}` : ', every day';
-  const clock = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   if (t.type === 'time') {
     const [h, m] = (t.at || '0:00').split(':').map(Number);
     return `${clock(new Date(2000, 0, 1, h, m))}${days}`;
@@ -99,16 +106,32 @@ async function fire(rule, { source = 'rule', reason } = {}) {
 }
 
 // One scheduler pass. Exported for tests; `now` injectable.
-async function tick(now = new Date()) {
+// `since` = when the previous pass ran. With it, tick can tell "the scheduler was
+// frozen (laptop asleep) while this rule was due" apart from "rule was enabled after
+// its time today", and logs the former instead of skipping quietly.
+async function tick(now = new Date(), { since } = {}) {
   const fired = store.get('fired') || {};
   const today = dayKey(now);
   const ran = [];
+  if (since && now - since > PAUSE_NOTICE_MS) {
+    activity.log({ source: 'system', title: `Scheduler paused for ${duration(now - since)}`,
+      results: [`no rule checks from ${clock(since)} to ${clock(now)} (host asleep or frozen?)`] });
+  }
   for (const rule of list()) {
     if (!rule.enabled || fired[rule.id] === today) continue;
     const at = triggerTimeToday(rule, now);
     if (!at) continue;
     const late = now - at;
-    if (late < 0 || late > CATCH_UP_MS) continue;
+    if (late < 0) continue;
+    if (late > CATCH_UP_MS) {
+      if (since && at > since) {
+        fired[rule.id] = today;
+        store.set('fired', fired);
+        activity.log({ source: 'rule', title: `Skipped: ${rule.name}`,
+          results: [`missed: due ${clock(at)}, scheduler was paused until ${clock(now)}`] });
+      }
+      continue;
+    }
     fired[rule.id] = today;
     store.set('fired', fired);                 // record BEFORE acting: never double-fire
     ran.push(rule.id);
@@ -122,7 +145,13 @@ let timer = null;
 function startScheduler({ intervalMs = 30_000 } = {}) {
   if (timer) return;
   list();                                       // seed defaults on first run
-  timer = setInterval(() => tick().catch((e) => console.warn('Rule scheduler error:', e.message)), intervalMs);
+  let lastTick = null;
+  timer = setInterval(() => {
+    const now = new Date();
+    const since = lastTick;
+    lastTick = now;
+    tick(now, { since }).catch((e) => console.warn('Rule scheduler error:', e.message));
+  }, intervalMs);
   timer.unref?.();
   console.log(`Rule scheduler on (every ${intervalMs / 1000}s)${home() ? '' : ' (sun rules off: set HOME_LAT/HOME_LON)'}`);
 }

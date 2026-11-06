@@ -116,6 +116,29 @@ test('rules: sunset needs HOME_LAT/LON; with them it fires at sunset', async () 
   } finally { restore(); delete process.env.HOME_LAT; delete process.env.HOME_LON; }
 });
 
+test('rules: a trigger missed while the host slept is logged, not silently skipped', async () => {
+  const restore = quiet();
+  try {
+    rules.setEnabled('weekday-focus', true);              // 08:30 Mon-Fri
+    const mon = (h, m) => new Date(2026, 10, 9, h, m);
+    assert.deepEqual(await rules.tick(mon(8, 29), { since: mon(8, 28) }), []);
+    // laptop sleeps through 8:30, wakes at 10:53 (what happened Nov 6)
+    assert.deepEqual(await rules.tick(mon(10, 53), { since: mon(8, 29) }), [], 'not fired 2h late');
+    const [skip, pause] = activity.list(2);
+    assert.match(skip.title, /Skipped: Focus/);
+    assert.equal(skip.ok, false, 'shows up red in the activity log');
+    assert.match(pause.title, /Scheduler paused for 2h 24m/);
+    const before = activity.list(200).length;
+    await rules.tick(mon(10, 54), { since: mon(10, 53) });
+    assert.equal(activity.list(200).length, before, 'skip is reported once');
+
+    // enabled after its time with no scheduler gap: nothing to report
+    const tue = (h, m) => new Date(2026, 10, 10, h, m);
+    await rules.tick(tue(10, 0), { since: tue(9, 59) });
+    assert.equal(activity.list(200).length, before);
+  } finally { restore(); rules.setEnabled('weekday-focus', false); }
+});
+
 test('HTTP: scenes, rules, activity', async (t) => {
   const app = await startApp(require('../routes/automation'));
   t.after(app.close);
