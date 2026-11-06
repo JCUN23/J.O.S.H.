@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Play, Pause, SkipBack, SkipForward, Volume2, X, Heart } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, X, Heart, Loader2, MonitorSpeaker } from "lucide-react";
 import {
     getAccessToken,
 } from "./spotifyAuth";
@@ -15,7 +15,116 @@ import {
     saveTrack,
     transferPlayback,
     getDevices,
+    getRecentlyPlayed,
+    resumeOn,
 } from "./spotifyApi";
+import { usePanelPlayer, startPanelPlayer, activatePanelPlayer, setPanelPlayerEnabled } from "./panelPlayer";
+
+// Shown when nothing is playing anywhere: your last track and a one-tap Resume on the
+// panel itself (Web Playback SDK) or any Spotify device that's online.
+function ResumeCard({ token, theme, onLogin }) {
+    const panel = usePanelPlayer();
+    const [last, setLast] = useState(null);         // { track, context } | { needsLogin } | null
+    const [devices, setDevices] = useState([]);
+    const [target, setTarget] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState(null);
+
+    useEffect(() => {
+        let alive = true;
+        const load = () => {
+            getRecentlyPlayed(token).then((r) => { if (alive) setLast(r); }).catch(() => {});
+            getDevices(token).then((d) => { if (alive) setDevices(d?.devices || []); }).catch(() => {});
+        };
+        load();
+        const t = setInterval(load, 15000);
+        return () => { alive = false; clearInterval(t); };
+    }, [token]);
+
+    const options = [
+        ...(panel.deviceId ? [{ id: panel.deviceId, name: panel.name || "Sentinel Panel", here: true }] : []),
+        ...devices.filter((d) => d.id !== panel.deviceId && !d.is_restricted).map((d) => ({ id: d.id, name: d.name })),
+    ];
+    const chosen = options.find((o) => o.id === target) || options[0];
+    const track = last?.track;
+    const needsLogin = panel.status === "needs_login" || last?.needsLogin;
+
+    const resume = async () => {
+        if (!chosen) return;
+        if (chosen.here) activatePanelPlayer();          // must happen inside the tap
+        setBusy(true);
+        setMsg(null);
+        try {
+            const how = await resumeOn(token, chosen.id, track ? last : null);
+            setMsg({ ok: true, text: how === "resumed" ? `Resumed on ${chosen.name}` : `Playing on ${chosen.name}` });
+        } catch (e) {
+            setMsg({ ok: false, text: e.message });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className={`border border-${theme}-800 rounded-lg p-3 bg-black text-${theme}-300 space-y-3`}>
+            {track ? (
+                <div className="flex items-center gap-3">
+                    <img
+                        src={track.album?.images?.[2]?.url || track.album?.images?.[0]?.url}
+                        alt=""
+                        className={`w-12 h-12 rounded border border-${theme}-800 shrink-0`}
+                    />
+                    <div className="min-w-0 flex-1">
+                        <div className={`text-[10px] uppercase tracking-widest text-${theme}-600`}>Last played</div>
+                        <div className="text-sm truncate">{track.name}</div>
+                        <div className={`text-xs text-${theme}-600 truncate`}>{track.artists?.map((a) => a.name).join(", ")}</div>
+                    </div>
+                </div>
+            ) : (
+                <div className={`text-xs text-${theme}-600`}>Nothing playing right now.</div>
+            )}
+
+            {options.length > 1 && (
+                <div className="flex flex-wrap gap-1.5">
+                    {options.map((o) => (
+                        <button
+                            key={o.id}
+                            onClick={() => setTarget(o.id)}
+                            className={`text-[10px] px-2 py-1 rounded border flex items-center gap-1 ${chosen?.id === o.id
+                                ? `border-${theme}-500 text-${theme}-300 bg-${theme}-900/30`
+                                : `border-${theme}-900 text-${theme}-600`}`}
+                        >
+                            <MonitorSpeaker size={10} /> {o.name}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <button
+                onClick={resume}
+                disabled={busy || !chosen}
+                className={`w-full flex items-center justify-center gap-2 py-2 rounded text-sm text-white bg-${theme}-700 hover:bg-${theme}-600 disabled:opacity-40 transition`}
+            >
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                {chosen ? `${track ? "Resume" : "Play"} on ${chosen.name}` : panel.status === "loading" ? "Starting the panel player…" : "No Spotify device online"}
+            </button>
+
+            {needsLogin && (
+                <button onClick={onLogin} className={`w-full text-xs underline text-${theme}-500`}>
+                    Reconnect Spotify once so this screen can play music
+                </button>
+            )}
+            {panel.status === "premium_required" && (
+                <div className="text-xs text-yellow-400">Playing on this screen needs Spotify Premium.</div>
+            )}
+            {panel.status === "off" && !chosen && (
+                <button onClick={() => setPanelPlayerEnabled(true)} className={`w-full text-xs underline text-${theme}-500`}>
+                    Use this screen as a Spotify player
+                </button>
+            )}
+            {msg && <div className={`text-xs ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.text}</div>}
+        </div>
+    );
+}
 function getAverageColor(imgUrl, cb) {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -30,7 +139,7 @@ function getAverageColor(imgUrl, cb) {
     };
 }
 
-export default function SpotifyMiniPlayer({ onClose, compact = false, theme, onOpen, onLogin }) {
+export default function SpotifyMiniPlayer({ onClose, compact = false, theme, onLogin }) {
     const [playback, setPlayback] = useState(null);
     const [queue, setQueue] = useState(null);
     const [volume, setVolumeState] = useState(50);
@@ -129,6 +238,11 @@ export default function SpotifyMiniPlayer({ onClose, compact = false, theme, onO
         };
     }, [token]);
 
+
+    /* This screen as a Spotify device (installed panel app by default) */
+    useEffect(() => {
+        if (token) startPanelPlayer();
+    }, [token]);
 
     /* Poll playback and queue */
     useEffect(() => {
@@ -255,18 +369,9 @@ export default function SpotifyMiniPlayer({ onClose, compact = false, theme, onO
         );
     }
 
-    // 2️⃣ LOGGED IN, NO PLAYBACK YET
+    // 2️⃣ LOGGED IN, NOTHING PLAYING: last track + one-tap resume (no more "open Spotify")
     if (!track) {
-        return (
-            <div
-                onClick={onOpen}
-                className={`cursor-pointer border border-${theme}-800 rounded-lg p-3 bg-black text-${theme}-300`}
-            >
-                <div className="text-xs opacity-70">
-                    Open Spotify to start playing
-                </div>
-            </div>
-        );
+        return <ResumeCard token={token} theme={theme} onLogin={onLogin} />;
     }
 
 
