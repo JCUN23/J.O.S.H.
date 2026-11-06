@@ -317,6 +317,14 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   }
 
   // ===== GAME DAY MODE =====
+  if (toolName === 'activate_scene') {
+    const scenes = require('../scenes');
+    const scene = scenes.find(args.scene);
+    if (!scene) return `No scene called "${args.scene}". Available: ${scenes.list().map((s) => s.name).join(', ')}.`;
+    const r = await scenes.activate(scene, { source: 'voice' });
+    return `${scene.name} activated. ${r.results.join('. ')}`;
+  }
+
   if (toolName === 'game_day_mode') {
     // Shared with the API route and the automatic watcher (lib/gameDay)
     const team = findTeam(args.team);

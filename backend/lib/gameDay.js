@@ -4,12 +4,10 @@
 //
 // Previously the Sports widget did this in the browser: every open device fired it,
 // and every page reload during a game fired it again.
-const axios = require('axios');
 const path = require('path');
 const { TEAMS } = require('./teams');
-const { GOVEE_API_KEY, GOVEE_BASE_URL, HUE_BRIDGE_IP, HUE_USERNAME } = require('./config');
-const { SMARTTHINGS_BASE_URL, getSmartThingsToken } = require('./smartthings');
-const { rgbToHueBridgeHSB } = require('./color');
+const devices = require('./devices');
+const activity = require('./activity');
 const { createJsonStore } = require('./jsonStore');
 
 const state = createJsonStore(
@@ -19,52 +17,11 @@ const state = createJsonStore(
 
 // Hue lights that get team colors, primary then secondary (the two Hue Go lamps)
 const HUE_LIGHTS = (process.env.HUE_GAMEDAY_LIGHTS || '5,4').split(',').map((s) => s.trim()).filter(Boolean);
-// Same quirk as the Govee widget: H6076 accepts color with "Success" and ignores it
-const GOVEE_POWER_ONLY = ['H6076'];
 
-const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function setGoveeColors(colors) {
-  if (!GOVEE_API_KEY) return 'Govee not configured';
-  const headers = { 'Govee-API-Key': GOVEE_API_KEY, 'Content-Type': 'application/json' };
-  const { data } = await axios.get(`${GOVEE_BASE_URL}/devices`, { headers });
-  // Only devices that actually support color (plugs and the projector don't)
-  const strips = (data?.data?.devices || []).filter((d) =>
-    (d.supportCmds || []).includes('color')
-    && !GOVEE_POWER_ONLY.some((m) => String(d.model || '').toUpperCase().startsWith(m)));
-  const results = await Promise.allSettled(strips.map((d, i) =>
-    axios.put(`${GOVEE_BASE_URL}/devices/control`,
-      { device: d.device, model: d.model, cmd: { name: 'color', value: i % 2 === 0 ? colors.primary : colors.secondary } },
-      { headers })));
-  const ok = results.filter((r) => r.status === 'fulfilled' && (r.value.data?.code ?? 200) === 200).length;
-  return `Govee: ${ok}/${strips.length} lights set`;
-}
-
-async function setHueColors(colors) {
-  if (!HUE_BRIDGE_IP || !HUE_USERNAME) return 'Hue not configured';
-  const shades = [colors.primary, colors.secondary];
-  await Promise.all(HUE_LIGHTS.map((id, i) =>
-    axios.put(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights/${id}/state`,
-      { on: true, ...rgbToHueBridgeHSB(shades[i % 2]) })));
-  return `Hue: ${HUE_LIGHTS.length} lights set`;
-}
-
-async function wakeFrameTv() {
-  const token = await getSmartThingsToken();
-  if (!token) return 'TV: SmartThings not connected';
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const { data } = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, { headers });
-  const tv = data.items?.find((d) => d.label?.toLowerCase().includes('frame')
-    && d.components?.[0]?.capabilities?.some((c) => c.id === 'samsungvd.mediaInputSource'));
-  if (!tv) return 'TV: Frame TV not found';
-  const send = (capability, command, args = []) => axios.post(`${SMARTTHINGS_BASE_URL}/devices/${tv.deviceId}/commands`,
-    { commands: [{ capability, command, arguments: args }] }, { headers });
-  await send('samsungvd.ambient', 'off');   // leave Art Mode
-  await send('switch', 'on');
-  await delay(2000);                        // let it wake before navigating
-  await send('samsungvd.remoteControl', 'send', ['HOME']);
-  return 'TV: on, home screen';
-}
+const alternate = (colors) => (i) => (i % 2 === 0 ? colors.primary : colors.secondary);
+const setGoveeColors = (colors) => devices.goveeApply({ colorFor: alternate(colors) });
+const setHueColors = (colors) => devices.hueApply({ lightIds: HUE_LIGHTS, colorFor: alternate(colors) });
+const wakeFrameTv = () => devices.tvApply({ artMode: false, power: true, home: true });
 
 // Lights (+ TV unless lightsOnly). Each step reports its own result; one failing
 // integration never blocks the others.
@@ -75,6 +32,7 @@ async function activate(team, { lightsOnly = false, reason = 'manual' } = {}) {
     r.status === 'fulfilled' ? r.value : `error: ${r.reason?.response?.data?.message || r.reason?.message}`);
   const entry = { team: team.name, at: new Date().toISOString(), reason, lightsOnly, results };
   state.set('last', entry);
+  activity.log({ source: reason.startsWith('auto') ? 'gameday' : reason, title: `Game Day: ${team.name}`, results });
   console.log(`🏟️  Game Day (${reason}) for ${team.name}: ${results.join(' | ')}`);
   return entry;
 }

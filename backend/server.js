@@ -53,6 +53,7 @@ app.use(require('./routes/govee'));
 app.use(require('./routes/creality'));
 app.use(require('./routes/smartthings'));
 app.use(require('./routes/gameday'));
+app.use(require('./routes/automation'));
 app.use(require('./routes/sentinel'));
 app.use(require('./routes/tts'));
 
@@ -78,4 +79,9 @@ app.listen(PORT, '0.0.0.0', () => {
 // Only when run directly (`node server.js`), never when tests require this file.
 if (require.main === module && process.env.GAMEDAY_AUTO !== 'false') {
   require('./lib/gameDay').startWatcher();
+}
+// Rule scheduler (time / sunset triggers). Same rule: never when tests require this file.
+if (require.main === module && process.env.RULES_AUTO !== 'false') {
+  require('./lib/rules').startScheduler();
+  require('./lib/activity').log({ source: 'system', title: 'Sentinel backend started' });
 }

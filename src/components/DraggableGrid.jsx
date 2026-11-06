@@ -7,7 +7,8 @@ const STORAGE_KEY = 'batcomputer_widget_order';
 const WIDGET_KEYS = [
     'weather', 'sports', 'calendar', 'quickcontrols',
     'spotify', 'news', 'smartthings', 'govee', 'bluetooth',
-    'crealityprinter', 'phillips_hue', 'arduino'
+    'crealityprinter', 'phillips_hue', 'arduino',   // 'arduino' slot holds the Tesla widget
+    'scenes', 'activity'
 ];
 
 const DraggableGrid = ({ children, theme = 'cyan' }) => {
@@ -17,8 +18,10 @@ const DraggableGrid = ({ children, theme = 'cyan' }) => {
     // Load saved order or use default
     const [order, setOrder] = useState(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            return saved ? JSON.parse(saved) : WIDGET_KEYS;
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+            if (!Array.isArray(saved)) return WIDGET_KEYS;
+            // Keep the user's order, append widgets added since it was saved
+            return [...saved.filter((k) => WIDGET_KEYS.includes(k)), ...WIDGET_KEYS.filter((k) => !saved.includes(k))];
         } catch {
             return WIDGET_KEYS;
         }

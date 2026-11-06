@@ -7,6 +7,8 @@ import SportsWidget from './components/SportsWidget';
 import CalendarWidget from './components/CalendarWidget';
 import QuickControls from './components/QuickControls';
 import SystemStatus from './components/SystemStatus';
+import ScenesWidget from './components/ScenesWidget';
+import ActivityWidget from './components/ActivityWidget';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
 import FaceLock from './components/AuthAndProfiles/FaceLock';
@@ -87,8 +89,7 @@ const BatcomputerHub = () => {
 
   // Widget visibility state
   const [widgetVisibility, setWidgetVisibility] = useState(() => {
-    const saved = localStorage.getItem('widget_visibility');
-    return saved ? JSON.parse(saved) : {
+    const defaults = {
       weather: true,
       sports: true,
       calendar: true,
@@ -100,8 +101,14 @@ const BatcomputerHub = () => {
       bluetooth: true,
       printer: true,
       hue: true,
-      tesla: true
+      tesla: true,
+      scenes: true,
+      activity: true,
     };
+    // Merge so widgets added after a device saved its settings still show up
+    // (saved settings used to replace the defaults wholesale -> new widgets hidden).
+    try { return { ...defaults, ...JSON.parse(localStorage.getItem('widget_visibility') || '{}') }; }
+    catch { return defaults; }
   });
 
   // Save widget visibility to localStorage whenever it changes
@@ -968,6 +975,9 @@ const BatcomputerHub = () => {
             {widgetVisibility.printer && <CrealityPrinterWidget theme={theme} />}
             {widgetVisibility.hue && <PhilipsHueWidget theme={theme} setHueIsConnected={setHueIsConnected} />}
             {widgetVisibility.tesla && <TeslaWidget theme={theme} />}
+            {/* New widgets go at the END: DraggableGrid maps children to WIDGET_KEYS by position */}
+            {widgetVisibility.scenes && <ScenesWidget theme={theme} />}
+            {widgetVisibility.activity && <ActivityWidget theme={theme} />}
           </DraggableGrid>
         </div>
 

@@ -129,6 +129,18 @@ const SENTINEL_TOOLS = [
   {
     type: "function",
     function: {
+      name: "activate_scene",
+      description: "Activate a lighting/TV scene by name. Available scenes: Movie Night, Relax, Focus, All Bright, Goodnight, All Off. Use when the user asks for a mood or routine (e.g. 'movie night', 'goodnight', 'I'm going to bed', 'time to focus').",
+      parameters: {
+        type: "object",
+        properties: { scene: { type: "string", description: "Scene name, e.g. 'Movie Night'" } },
+        required: ["scene"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "play_music",
       description: "Search for and play music on Spotify. Use for artist requests, song requests, mood requests, or genre requests. Can also set the room lights to match the album/artist colors for an immersive vibe.",
       parameters: {
