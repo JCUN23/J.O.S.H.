@@ -9,7 +9,9 @@ for (const k of ['ACTIVITY', 'SCENES', 'RULES', 'GAMEDAY']) process.env[`${k}_ST
 Object.assign(process.env, { GOVEE_API_KEY: 'k', HUE_BRIDGE_IP: '10.0.0.2', HUE_USERNAME: 'u', SMARTTHINGS_TOKEN: 'PAT' });
 delete process.env.HOME_LAT; delete process.env.HOME_LON;
 
+process.env.GOVEE_GAP_MS = '0';
 const sent = { govee: [], hue: [], tv: [] };
+let goveeReply = null;   // (body, attempt) => response | throws; default OK
 mockModules({ axios: {
   get: async (url) => url.includes('govee')
     ? { data: { data: { devices: [
@@ -21,7 +23,11 @@ mockModules({ axios: {
         { deviceId: 'tv1', label: 'Frame TV', components: [{ capabilities: [{ id: 'samsungvd.mediaInputSource' }] }] },
         { deviceId: 'fridge', label: 'Fridge', components: [{ capabilities: [] }] },
       ] } },
-  put: async (url, body) => { (url.includes('govee') ? sent.govee : sent.hue).push(url.includes('govee') ? body : { url, body }); return { data: { code: 200 } }; },
+  put: async (url, body) => {
+    (url.includes('govee') ? sent.govee : sent.hue).push(url.includes('govee') ? body : { url, body });
+    if (url.includes('govee') && goveeReply) return goveeReply(body);
+    return { data: { code: 200 } };
+  },
   post: async (url, body) => { sent.tv.push(`${url.match(/devices\/([^/]+)/)[1]}:${body.commands[0].capability}:${body.commands[0].command}`); return { data: {} }; },
 } });
 const reset = () => { sent.govee = []; sent.hue = []; sent.tv = []; };
@@ -69,6 +75,23 @@ test('actions: off turns everything off; kelvin maps to colorTem / Hue mireds; T
   assert.deepEqual(sent.govee.map((b) => b.cmd), [{ name: 'colorTem', value: 2700 }]);
   assert.equal(sent.hue[0].body.ct, 370);
   assert.deepEqual(sent.tv, ['tv1:samsungvd.ambient:on']);
+});
+
+test('govee: failures name the device and reason; a 429 is retried once', async () => {
+  reset();
+  const seen = {};
+  goveeReply = (body) => {
+    seen[body.device] = (seen[body.device] || 0) + 1;
+    if (body.device === 'plug') return { data: { code: 400, message: 'device not online' } };
+    if (body.device === 'rope' && seen.rope === 1) throw Object.assign(new Error('HTTP 429'), { response: { status: 429, data: {} } });
+    return { data: { code: 200 } };
+  };
+  try {
+    const [r] = await runActions([{ type: 'lights', on: false }]);
+    assert.equal(seen.rope, 2, 'rate-limited command retried');
+    assert.match(r, /^Govee: 2\/3 commands ok \(failed: H5086 turn: device not online \(code 400\)\)$/);
+    assert.equal(activity.log({ source: 'test', title: 't', results: [r] }).ok, false, 'partial failure shows red');
+  } finally { goveeReply = null; }
 });
 
 test('scenes: defaults seeded, found by loose names, activation is logged', async () => {

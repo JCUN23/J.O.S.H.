@@ -10,7 +10,7 @@ const store = createJsonStore(
 );
 
 let seq = 0;
-const isFailure = (r) => /error|missed|not configured|not connected|not found|0\/[1-9]/i.test(r);
+const isFailure = (r) => /error|failed|missed|not configured|not connected|not found|0\/[1-9]/i.test(r);
 
 // source: 'scene' | 'rule' | 'gameday' | 'voice' | 'panel' | 'manual' | 'system'
 function log({ source = 'system', title, results = [], detail } = {}) {

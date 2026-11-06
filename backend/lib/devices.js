@@ -8,6 +8,8 @@ const { rgbToHueBridgeHSB } = require('./color');
 
 // H6076 lists color/brightness but ignores them via the API (see goveeCapabilities.js)
 const GOVEE_POWER_ONLY = ['H6076'];
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+const GOVEE_GAP_MS = process.env.GOVEE_GAP_MS !== undefined ? Number(process.env.GOVEE_GAP_MS) : 250;
 const goveeHeaders = () => ({ 'Govee-API-Key': GOVEE_API_KEY, 'Content-Type': 'application/json' });
 
 async function goveeDevices() {
@@ -20,28 +22,58 @@ async function goveeDevices() {
 }
 
 const goveeSend = (d, cmd) => axios.put(`${GOVEE_BASE_URL}/devices/control`,
-  { device: d.device, model: d.model, cmd }, { headers: goveeHeaders() });
+  { device: d.device, model: d.model, cmd }, { headers: goveeHeaders(), timeout: 8000 });
 
-// Count a Govee call as OK only if Govee's in-band code says so
-const goveeOk = (r) => r.status === 'fulfilled' && (r.value?.data?.code ?? 200) === 200;
+// Why a Govee call failed, in words. Govee reports some failures in-band (HTTP 200 with
+// a non-200 `code`), others as HTTP errors; 429 = rate limited.
+function goveeFailure(err, res) {
+  if (res) return `${res.data?.message || 'rejected'} (code ${res.data?.code})`;
+  const st = err?.response?.status;
+  const msg = err?.response?.data?.message || err?.message || 'failed';
+  return st ? `${msg} (HTTP ${st})` : msg;
+}
+
+// One command with one retry for the failures that are usually transient.
+async function goveeCommand(d, cmd) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await goveeSend(d, cmd);
+      if ((res?.data?.code ?? 200) === 200) return null;
+      if (attempt === 0 && /busy|limit|timeout/i.test(res.data?.message || '')) { await delay(1200); continue; }
+      return goveeFailure(null, res);
+    } catch (err) {
+      const st = err?.response?.status;
+      if (attempt === 0 && (st === 429 || st >= 500 || !st)) { await delay(st === 429 ? 2000 : 1000); continue; }
+      return goveeFailure(err);
+    }
+  }
+  return 'failed after retry';
+}
 
 // Apply a light state to every Govee device that supports each part of it.
 // colorFor(index) lets callers alternate colors across strips (Game Day).
+// Sent one at a time with a short gap: Govee's cloud drops bursts of parallel commands.
 async function goveeApply({ on, brightness, color, colorFor, kelvin }) {
   if (!GOVEE_API_KEY) return 'Govee: not configured';
   const devices = await goveeDevices();
-  const ops = [];
+  const plan = [];
   let colorIndex = 0;
   for (const d of devices) {
-    if (on === false) { ops.push(goveeSend(d, { name: 'turn', value: 'off' })); continue; }
+    if (on === false) { plan.push([d, { name: 'turn', value: 'off' }]); continue; }
     const c = colorFor ? colorFor(colorIndex) : color;
-    if (c && d.can('color')) { ops.push(goveeSend(d, { name: 'color', value: c })); colorIndex++; }
-    else if (kelvin && d.can('colorTem')) ops.push(goveeSend(d, { name: 'colorTem', value: kelvin }));
-    if (brightness && d.can('brightness')) ops.push(goveeSend(d, { name: 'brightness', value: Math.round(brightness) }));
-    if (on === true && !c && !kelvin && !brightness) ops.push(goveeSend(d, { name: 'turn', value: 'on' }));
+    if (c && d.can('color')) { plan.push([d, { name: 'color', value: c }]); colorIndex++; }
+    else if (kelvin && d.can('colorTem')) plan.push([d, { name: 'colorTem', value: kelvin }]);
+    if (brightness && d.can('brightness')) plan.push([d, { name: 'brightness', value: Math.round(brightness) }]);
+    if (on === true && !c && !kelvin && !brightness) plan.push([d, { name: 'turn', value: 'on' }]);
   }
-  const results = await Promise.allSettled(ops);
-  return `Govee: ${results.filter(goveeOk).length}/${results.length} commands ok`;
+  const failures = [];
+  for (const [i, [d, cmd]] of plan.entries()) {
+    if (i) await delay(GOVEE_GAP_MS);
+    const why = await goveeCommand(d, cmd);
+    if (why) failures.push(`${d.deviceName || d.model} ${cmd.name}: ${why}`);
+  }
+  const head = `Govee: ${plan.length - failures.length}/${plan.length} commands ok`;
+  return failures.length ? `${head} (failed: ${failures.join('; ')})` : head;
 }
 
 // Hue: group 0 is "all lights" on the bridge; lightIds targets specific lights, and
@@ -80,7 +112,6 @@ async function frameTvs() {
   return { token, tvs, send };
 }
 
-const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // { power: true|false, artMode: true|false, home: true }
 // Local network control (lib/frameTv.js) when FRAME_TVS is set; SmartThings cloud otherwise.
