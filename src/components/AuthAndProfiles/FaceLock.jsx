@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Lock, Loader2 } from 'lucide-react';
 import { useProfile } from './ProfileContext.jsx';
 import { getCachedFaces } from '../../utils/faceStore';
+import { loadFaceApi, FACE_MODEL_URL } from '../../utils/faceApiLoader';
 const FaceLock = ({ isLocked, onUnlock, theme = 'cyan' }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [status, setStatus] = useState('');
@@ -28,18 +29,8 @@ const FaceLock = ({ isLocked, onUnlock, theme = 'cyan' }) => {
         const loadModels = async () => {
             try {
                 addLog('Initializing face recognition system...');
-                if (!window.faceapi) {
-                    const script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js';
-                    script.async = true;
-                    document.body.appendChild(script);
-                    await new Promise((res, rej) => {
-                        script.onload = res;
-                        script.onerror = rej;
-                    });
-                }
-
-                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+                await loadFaceApi();                       // shared with idle-mode wake
+                const MODEL_URL = FACE_MODEL_URL;
                 await Promise.all([
                     window.faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     window.faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),

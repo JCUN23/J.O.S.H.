@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Activity, RefreshCw } from 'lucide-react';
+import { Activity, RefreshCw, BellRing } from 'lucide-react';
 import { getActivity, ACTIVITY_CHANGED } from '../utils/automationApi';
+import { sendTestNotification } from '../utils/homeApi';
 
 const REFRESH_MS = 20_000;
-const SOURCE_LABEL = { scene: 'Scene', rule: 'Rule', gameday: 'Game Day', voice: 'Voice', panel: 'Panel', manual: 'Manual', system: 'System' };
+const SOURCE_LABEL = { scene: 'Scene', rule: 'Rule', gameday: 'Game Day', voice: 'Voice', panel: 'Panel', manual: 'Manual', system: 'System', presence: 'Home', printer: 'Printer' };
 
 const timeAgo = (iso) => {
     const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
@@ -16,6 +17,13 @@ const timeAgo = (iso) => {
 // What the house did, and why.
 const ActivityWidget = ({ theme }) => {
     const [entries, setEntries] = useState([]);
+    const [pushMsg, setPushMsg] = useState(null);
+    const testPush = () => {
+        sendTestNotification()
+            .then(() => setPushMsg({ ok: true, text: 'Test notification sent. Check your phone.' }))
+            .catch((e) => setPushMsg({ ok: false, text: e.message === 'NTFY_TOPIC not set' ? 'Notifications not set up: add NTFY_TOPIC to backend/.env' : `Not sent: ${e.message}` }))
+            .finally(() => setTimeout(() => setPushMsg(null), 6000));
+    };
     const [error, setError] = useState('');
     const [open, setOpen] = useState(null);
 
@@ -45,10 +53,17 @@ const ActivityWidget = ({ theme }) => {
                     <Activity className={`text-${theme}-400`} size={20} />
                     <h3 className={`text-lg font-semibold text-${theme}-400`}>ACTIVITY</h3>
                 </div>
-                <button onClick={load} aria-label="Refresh activity" className={`text-${theme}-600 hover:text-${theme}-400`}>
-                    <RefreshCw size={14} />
-                </button>
+                <div className="flex items-center gap-3">
+                    <button onClick={testPush} aria-label="Send a test notification to your phone" title="Send a test notification"
+                        className={`text-${theme}-600 hover:text-${theme}-400`}>
+                        <BellRing size={14} />
+                    </button>
+                    <button onClick={load} aria-label="Refresh activity" className={`text-${theme}-600 hover:text-${theme}-400`}>
+                        <RefreshCw size={14} />
+                    </button>
+                </div>
             </div>
+            {pushMsg && <div className={`text-xs mb-2 ${pushMsg.ok ? `text-${theme}-400` : 'text-red-400'}`}>{pushMsg.text}</div>}
             {error && <div className="text-xs text-red-400 mb-2">{error}</div>}
             {!error && entries.length === 0 && (
                 <div className={`text-xs text-${theme}-700`}>Nothing yet. Run a scene and it shows up here.</div>

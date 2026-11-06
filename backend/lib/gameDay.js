@@ -33,6 +33,10 @@ async function activate(team, { lightsOnly = false, reason = 'manual' } = {}) {
   const entry = { team: team.name, at: new Date().toISOString(), reason, lightsOnly, results };
   state.set('last', entry);
   activity.log({ source: reason.startsWith('auto') ? 'gameday' : reason, title: `Game Day: ${team.name}`, results });
+  if (reason.startsWith('auto')) {
+    require('./notify').notify({ title: `${team.name} game is on`, message: `Game Day lights are up. ${results.join(' · ')}`,
+      category: 'gameday', priority: 3, tags: ['tada'] });
+  }
   console.log(`🏟️  Game Day (${reason}) for ${team.name}: ${results.join(' | ')}`);
   return entry;
 }

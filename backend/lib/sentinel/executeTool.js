@@ -317,6 +317,16 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   }
 
   // ===== GAME DAY MODE =====
+  if (toolName === 'printer_status') {
+    const p = require('../bambu').snapshot();
+    if (!p.configured) return 'The printer is not set up yet (BAMBU_HOST, BAMBU_SERIAL, BAMBU_ACCESS_CODE).';
+    if (!p.connected) return `Can't reach the printer${p.error ? `: ${p.error}` : ''}.`;
+    if (!p.active) return `Printer is ${String(p.state || 'idle').toLowerCase()}. Nozzle ${p.nozzle ?? '?'}°C, bed ${p.bed ?? '?'}°C.`;
+    const left = p.remainingMin != null ? `${Math.floor(p.remainingMin / 60)}h ${p.remainingMin % 60}m left` : 'time left unknown';
+    const done = p.finishAt ? `, done around ${new Date(p.finishAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : '';
+    return `Printing ${p.job || 'a job'}: ${p.percent ?? '?'}% (layer ${p.layer ?? '?'} of ${p.totalLayers ?? '?'}), ${left}${done}.`;
+  }
+
   if (toolName === 'activate_scene') {
     const scenes = require('../scenes');
     const scene = scenes.find(args.scene);
@@ -336,6 +346,31 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   // ===== STUBS (not yet wired server-side) =====
   if (toolName === 'control_spotify') return 'Use the play_music tool instead for music requests. For basic playback control (pause/skip), action noted: ' + args.action;
   // ===== TV CONTROL (SmartThings → Samsung Frame TV) =====
+  if (toolName === 'control_tv' && require('../frameTv').configured().length) {
+    // Local network control (lib/frameTv.js): every configured Frame TV.
+    const frame = require('../frameTv');
+    const keyFor = { mute: 'KEY_MUTE', home: 'KEY_HOME', hdmi: 'KEY_HDMI' };
+    const out = [];
+    for (const tv of frame.configured()) {
+      try {
+        if (args.action === 'on') out.push(`${tv.name}: ${await frame.powerOn(tv)}`);
+        else if (args.action === 'off') out.push(`${tv.name}: ${await frame.powerOff(tv)}`);
+        else if (args.action === 'art_mode_on' || args.action === 'art_mode_off') {
+          await frame.powerOn(tv);
+          await frame.setArtMode(tv, args.action === 'art_mode_on');
+          out.push(`${tv.name}: art mode ${args.action === 'art_mode_on' ? 'on' : 'off'}`);
+        } else if (args.action === 'volume') {
+          const steps = Math.min(Math.abs(parseInt(args.value, 10) || 3), 15);
+          const up = !String(args.value || '').startsWith('-');
+          for (let i = 0; i < steps; i++) await frame.sendKey(tv, up ? 'KEY_VOLUP' : 'KEY_VOLDOWN');
+          out.push(`${tv.name}: volume ${up ? 'up' : 'down'} ${steps}`);
+        } else if (keyFor[args.action]) { await frame.sendKey(tv, keyFor[args.action]); out.push(`${tv.name}: ${args.action}`); }
+        else out.push(`${tv.name}: "${args.action}" isn't supported`);
+      } catch (err) { out.push(`${tv.name}: ${err.message}`); }
+    }
+    return out.join('. ');
+  }
+
   if (toolName === 'control_tv') {
     try {
       const token = await getSmartThingsToken();

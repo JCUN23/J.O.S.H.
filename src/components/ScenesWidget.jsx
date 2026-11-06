@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Sparkles, Film, Sofa, Target, Sun, Moon, Power, Play, Loader2 } from 'lucide-react';
 import { getScenes, activateScene, getRules, setRuleEnabled, runRule } from '../utils/automationApi';
+import { getPresence } from '../utils/homeApi';
 
 const ICONS = { film: Film, sofa: Sofa, target: Target, sun: Sun, moon: Moon, power: Power };
 
@@ -11,6 +12,15 @@ const ScenesWidget = ({ theme }) => {
     const [busy, setBusy] = useState(null);           // scene/rule id in flight
     const [flash, setFlash] = useState(null);         // { id, ok, text }
     const [error, setError] = useState('');
+    const [people, setPeople] = useState([]);         // presence (Tailscale)
+
+    useEffect(() => {
+        let alive = true;
+        const poll = () => getPresence().then((d) => { if (alive) setPeople(d.people || []); }).catch(() => {});
+        poll();
+        const t = setInterval(poll, 60000);
+        return () => { alive = false; clearInterval(t); };
+    }, []);
 
     const load = useCallback(async () => {
         try {
@@ -91,6 +101,18 @@ const ScenesWidget = ({ theme }) => {
                 })}
             </div>
 
+            {people.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    <span className={`text-xs text-${theme}-600 mr-1`}>Home</span>
+                    {people.map((p) => (
+                        <span key={p.id} title={p.since ? `since ${new Date(p.since).toLocaleTimeString()}` : 'checking…'}
+                            className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 ${p.status === 'home' ? 'bg-green-600/25 text-green-400' : 'bg-gray-700/40 text-gray-400'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'home' ? 'bg-green-400' : p.status === 'away' ? 'bg-gray-500' : 'bg-yellow-400'}`} />
+                            {p.name}{p.status === 'unknown' ? ' ?' : p.status === 'away' ? ' (away)' : ''}
+                        </span>
+                    ))}
+                </div>
+            )}
             <div className={`text-xs text-${theme}-600 mb-1`}>Rules</div>
             <div className="space-y-1">
                 {rules.map((r) => (

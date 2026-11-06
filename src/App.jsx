@@ -10,6 +10,8 @@ import SystemStatus from './components/SystemStatus';
 import ScenesWidget from './components/ScenesWidget';
 import ActivityWidget from './components/ActivityWidget';
 import FrameTvWidget from './components/FrameTvWidget';
+import IdleMode from './components/IdleMode';
+import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT } from './utils/idlePrefs';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
 import FaceLock from './components/AuthAndProfiles/FaceLock';
@@ -25,7 +27,7 @@ import OnboardingScreen from './components/AuthAndProfiles/OnboardingScreen';
 import BluetoothWidget from './components/BluetoothWidget';
 import GoveeWidget from './components/GoveeWidget';
 import DraggableGrid from './components/DraggableGrid';
-import CrealityPrinterWidget from './components/CrealityPrinterWidget';
+import BambuPrinterWidget from './components/BambuPrinterWidget';
 import SmartThingsWidget from './components/SmartThingsWidget';
 import PhilipsHueWidget from './components/PhillipsHueWidget';
 import TeslaWidget from './components/TeslaWidget';
@@ -60,6 +62,8 @@ const BatcomputerHub = () => {
     return !/Android/i.test(navigator.userAgent);
   });
   const [awaitingCommand, setAwaitingCommand] = useState(false);
+  const [idleEnabled, setIdleEnabledState] = useState(getIdleEnabled);   // per device
+  const toggleIdle = () => { const next = !idleEnabled; setIdleEnabled(next); setIdleEnabledState(next); };
   const [wakeWordActive, setWakeWordActive] = useState(false); // Is always-on listening active?
 
   const { profileData } = useProfile();
@@ -353,6 +357,11 @@ const BatcomputerHub = () => {
   useEffect(() => {
     awaitingCommandRef.current = awaitingCommand;
   }, [awaitingCommand]);
+
+  // Voice activity wakes the idle screen
+  useEffect(() => {
+    if (awaitingCommand || listening) window.dispatchEvent(new Event(WAKE_EVENT));
+  }, [awaitingCommand, listening]);
 
   const processVoiceCommand = useCallback(async (command) => {
     if (!command.trim()) return;
@@ -922,6 +931,7 @@ const BatcomputerHub = () => {
 
   return (
     <>
+      <IdleMode key={isLocked ? 'paused' : 'active'} enabled={idleEnabled} paused={isLocked} minutes={IDLE_MINUTES} theme={theme} />
       <FaceLock
         isLocked={isLocked}
         verificationRequested={verificationRequested}
@@ -940,6 +950,8 @@ const BatcomputerHub = () => {
             setIsLocked={setIsLocked}
             widgetVisibility={widgetVisibility}
             toggleWidgetVisibility={toggleWidgetVisibility}
+            idleEnabled={idleEnabled}
+            toggleIdle={toggleIdle}
           />
 
           {/* Fixed Top Section - Always visible */}
@@ -974,7 +986,7 @@ const BatcomputerHub = () => {
             />}
             {widgetVisibility.govee && <GoveeWidget theme={theme} setGoveeIsConnected={setGoveeIsConnected} />}
             {widgetVisibility.bluetooth && <BluetoothWidget theme={theme} />}
-            {widgetVisibility.printer && <CrealityPrinterWidget theme={theme} />}
+            {widgetVisibility.printer && <BambuPrinterWidget theme={theme} />}
             {widgetVisibility.hue && <PhilipsHueWidget theme={theme} setHueIsConnected={setHueIsConnected} />}
             {widgetVisibility.tesla && <TeslaWidget theme={theme} />}
             {/* New widgets go at the END: DraggableGrid maps children to WIDGET_KEYS by position */}

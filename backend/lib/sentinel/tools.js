@@ -55,12 +55,12 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "control_tv",
-      description: "Control Samsung Frame TV via SmartThings — power, art mode, volume, HDMI input, home screen",
+      description: "Control the Samsung Frame TV — power, art mode, volume, mute, HDMI input, home screen",
       parameters: {
         type: "object",
         properties: {
           action: { type: "string", enum: ["on", "off", "art_mode_on", "art_mode_off", "mute", "volume", "hdmi", "home"], description: "The action to perform" },
-          value: { type: "string", description: "For volume: number 0-100. For hdmi: 1-4" }
+          value: { type: "string", description: "For volume: steps to move, e.g. '5' louder or '-5' quieter. For hdmi: 1-4" }
         },
         required: ["action"]
       }
@@ -123,6 +123,14 @@ const SENTINEL_TOOLS = [
     function: {
       name: "get_news",
       description: "Get current news headlines",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "printer_status",
+      description: "Get the 3D printer's (Bambu P2S) current status: idle/printing, job name, percent done, time remaining, temperatures. Use for 'how's my print', 'when is the print done'.",
       parameters: { type: "object", properties: {} }
     }
   },

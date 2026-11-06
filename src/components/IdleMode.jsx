@@ -1,0 +1,97 @@
+import { useEffect, useRef, useState } from 'react';
+import { loadFaceDetector } from '../utils/faceApiLoader';
+import { WAKE_EVENT } from '../utils/idlePrefs';
+
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+const wake = () => window.dispatchEvent(new Event(WAKE_EVENT));
+
+// After `minutes` without a touch, the panel fades to a dim clock over a slow aurora.
+// Wakes on touch, on the wake word (WAKE_EVENT), or when the camera sees any face.
+// The clock drifts a little every minute so nothing sits still on the AMOLED screen.
+// The parent remounts this (key) when it pauses, so a stale idle state never reappears.
+const IdleMode = ({ enabled, paused, minutes = 3, theme }) => {
+    const [idle, setIdle] = useState(false);
+    const [now, setNow] = useState(() => new Date());
+    const [offset, setOffset] = useState({ x: 0, y: 0 });
+    const [note, setNote] = useState('');
+    const videoRef = useRef(null);
+    const active = enabled && !paused;
+
+    // Inactivity timer
+    useEffect(() => {
+        if (!active) return undefined;
+        let timer;
+        const arm = () => { clearTimeout(timer); timer = setTimeout(() => setIdle(true), minutes * 60000); };
+        const onWake = () => { setIdle(false); arm(); };
+        ACTIVITY_EVENTS.forEach((e) => window.addEventListener(e, arm, { passive: true }));
+        window.addEventListener(WAKE_EVENT, onWake);
+        arm();
+        return () => {
+            clearTimeout(timer);
+            ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, arm));
+            window.removeEventListener(WAKE_EVENT, onWake);
+        };
+    }, [active, minutes]);
+
+    // Clock + burn-in drift while idle
+    useEffect(() => {
+        if (!idle) return undefined;
+        const clock = setInterval(() => setNow(new Date()), 10000);
+        const drift = setInterval(() => setOffset({ x: Math.round((Math.random() - 0.5) * 80), y: Math.round((Math.random() - 0.5) * 50) }), 60000);
+        return () => { clearInterval(clock); clearInterval(drift); };
+    }, [idle]);
+
+    // Camera wake: tiny face detector on a 320x240 stream, only while idle
+    useEffect(() => {
+        if (!idle) return undefined;
+        let alive = true;
+        let stream = null;
+        let timer = null;
+        (async () => {
+            try {
+                const faceapi = await loadFaceDetector();
+                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' }, audio: false });
+                if (!alive) return;
+                const video = videoRef.current;
+                video.srcObject = stream;
+                await video.play();
+                const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 });
+                timer = setInterval(async () => {
+                    if (document.hidden || !alive) return;
+                    try { if (await faceapi.detectSingleFace(video, opts)) wake(); } catch { /* frame not ready */ }
+                }, 1500);
+            } catch {
+                if (alive) setNote('Tap anywhere to wake');
+            }
+        })();
+        return () => {
+            alive = false;
+            clearInterval(timer);
+            stream?.getTracks().forEach((t) => t.stop());
+        };
+    }, [idle]);
+
+    if (!active || !idle) return null;
+
+    const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M$/, '');
+    const date = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    return (
+        <div
+            data-hud={theme}
+            role="button"
+            aria-label="Wake the panel"
+            onPointerDown={wake}
+            className="idle-root fixed inset-0 z-[200] bg-black select-none overflow-hidden"
+        >
+            <div className="idle-aurora" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ transform: `translate(${offset.x}px, ${offset.y}px)`, transition: 'transform 4s ease-in-out' }}>
+                <div className="idle-clock tabular-nums">{time}</div>
+                <div className="idle-date">{date}</div>
+                {note && <div className="mt-10 text-xs text-gray-600 tracking-widest uppercase">{note}</div>}
+            </div>
+            <video ref={videoRef} muted playsInline className="absolute w-px h-px opacity-0 pointer-events-none" />
+        </div>
+    );
+};
+
+export default IdleMode;

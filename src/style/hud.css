@@ -209,3 +209,33 @@ body { background: #020407; }
 
 .hud-root { transition: filter 260ms ease; }
 @media (prefers-reduced-motion: reduce) { .hud-root { transition: none; } }
+
+/* ---------- Idle screen (IdleMode.jsx) ---------- */
+.idle-root { --hud: 34 189 238; animation: idle-in 1.6s ease both; }
+.idle-root[data-hud="yellow"] { --hud: 240 255 13; }
+.idle-root[data-hud="mocha"]  { --hud: 157 131 114; }
+@keyframes idle-in { from { opacity: 0; } to { opacity: 1; } }
+
+.idle-aurora {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(40% 35% at 30% 40%, rgb(var(--hud) / 0.16), transparent 70%),
+    radial-gradient(35% 30% at 70% 65%, rgb(var(--hud) / 0.10), transparent 70%);
+  filter: blur(40px);
+  animation: idle-drift 90s ease-in-out infinite alternate;
+}
+@keyframes idle-drift {
+  0%   { transform: translate(-4%, -3%) rotate(0deg) scale(1); }
+  50%  { transform: translate(5%, 2%) rotate(8deg) scale(1.08); }
+  100% { transform: translate(-2%, 5%) rotate(-6deg) scale(0.96); }
+}
+.idle-clock {
+  font-size: clamp(6rem, 18vw, 14rem); line-height: 1; font-weight: 200; letter-spacing: 0.02em;
+  color: rgb(var(--hud) / 0.75);
+  text-shadow: 0 0 40px rgb(var(--hud) / 0.25);
+}
+.idle-date {
+  margin-top: 1.25rem; font-size: clamp(0.9rem, 1.8vw, 1.35rem);
+  letter-spacing: 0.35em; text-transform: uppercase; color: rgb(var(--hud) / 0.45);
+}
+@media (prefers-reduced-motion: reduce) { .idle-aurora { animation: none; } }

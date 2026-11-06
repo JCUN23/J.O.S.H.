@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getCachedFaces } from '../utils/faceStore';
 
 // Header Component
-const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVisibility, toggleWidgetVisibility }) => {
+const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVisibility, toggleWidgetVisibility, idleEnabled, toggleIdle }) => {
     const [showWidgetMenu, setShowWidgetMenu] = useState(false);
     const dropdownRef = useRef(null);
     const registeredFaces = getCachedFaces();
@@ -103,6 +103,17 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
                                 </label>
                             ))}
                         </div>
+                        {toggleIdle && (
+                            <div className={`p-2 border-t ${border}`}>
+                                <label className={`flex items-center p-2 hover:bg-${theme}-900/30 rounded cursor-pointer`}>
+                                    <input type="checkbox" checked={idleEnabled} onChange={toggleIdle} className="mr-3 w-4 h-4" />
+                                    <span className={`text-${theme}-300 text-sm`}>
+                                        Idle screen
+                                        <span className={`block text-[10px] text-${theme}-700`}>Clock after 3 min, this device only</span>
+                                    </span>
+                                </label>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

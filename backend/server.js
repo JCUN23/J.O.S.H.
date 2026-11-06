@@ -53,6 +53,7 @@ app.use(require('./routes/govee'));
 app.use(require('./routes/creality'));
 app.use(require('./routes/smartthings'));
 app.use(require('./routes/frametv'));
+app.use(require('./routes/home'));
 app.use(require('./routes/gameday'));
 app.use(require('./routes/automation'));
 app.use(require('./routes/sentinel'));
@@ -85,4 +86,11 @@ if (require.main === module && process.env.GAMEDAY_AUTO !== 'false') {
 if (require.main === module && process.env.RULES_AUTO !== 'false') {
   require('./lib/rules').startScheduler();
   require('./lib/activity').log({ source: 'system', title: 'Sentinel backend started' });
+}
+// Heartbeat + "Sentinel is back / crashed" alerts, presence, and the printer watcher.
+if (require.main === module) {
+  require('./lib/uptime').start();
+  const rules = require('./lib/rules');
+  require('./lib/presence').start({ onEvent: (e) => rules.handlePresence(e) });
+  require('./lib/bambu').start();
 }

@@ -1,6 +1,8 @@
 // Rules: "when X, do Y". Triggers:
 //   { type: 'time', at: 'HH:MM', days?: [0-6] }            (0 = Sunday, local time)
 //   { type: 'sun', event: 'sunset'|'sunrise', offsetMin?, days? }  (needs HOME_LAT/HOME_LON)
+//   { type: 'presence', event: 'arrive'|'leave', who: 'anyone'|'everyone'|<person id> }
+// Optional conditions: { dark: true } = only between sunset and sunrise.
 // Action: { scene: '<scene id>' } or { actions: [...] }.
 // Each rule fires at most once per day. A trigger missed by more than CATCH_UP_MS
 // (backend was down, or the host was asleep) is skipped rather than firing hours late,
@@ -11,6 +13,7 @@ const { sunTimes } = require('./sun');
 const scenes = require('./scenes');
 const { runActions } = require('./actions');
 const activity = require('./activity');
+const { notify } = require('./notify');
 
 const CATCH_UP_MS = 10 * 60 * 1000;
 const PAUSE_NOTICE_MS = 5 * 60 * 1000;      // scheduler gap worth reporting (host slept)
@@ -24,7 +27,12 @@ const DEFAULT_RULES = [
     trigger: { type: 'time', at: '23:30', days: [0, 1, 2, 3, 4] }, action: { scene: 'goodnight' } },
   { id: 'weekday-focus', name: 'Focus lighting on weekday mornings', enabled: false,
     trigger: { type: 'time', at: '08:30', days: [1, 2, 3, 4, 5] }, action: { scene: 'focus' } },
+  { id: 'arrive-after-dark', name: 'Lights on when someone gets home after dark', enabled: false,
+    trigger: { type: 'presence', event: 'arrive', who: 'anyone' }, conditions: { dark: true }, action: { scene: 'relax' } },
+  { id: 'everyone-left', name: 'Everything off when everyone leaves', enabled: false,
+    trigger: { type: 'presence', event: 'leave', who: 'everyone' }, action: { scene: 'all-off' } },
 ];
+const PRESENCE_COOLDOWN_MS = 10 * 60 * 1000;   // a flapping phone can't strobe the lights
 
 const store = createJsonStore(
   process.env.RULES_STORE_PATH || path.join(__dirname, '..', 'data', 'rules.json'),
@@ -39,6 +47,9 @@ const home = () => {
 function list() {
   let rules = store.get('rules');
   if (!rules) { rules = DEFAULT_RULES; store.set('rules', rules); }
+  // Rules added in later versions show up (disabled) on installs that predate them.
+  const missing = DEFAULT_RULES.filter((d) => !rules.some((r) => r.id === d.id));
+  if (missing.length) { rules = [...rules, ...missing]; store.set('rules', rules); }
   return rules;
 }
 const get = (id) => list().find((r) => r.id === id) || null;
@@ -70,6 +81,15 @@ function triggerTimeToday(rule, now) {
 }
 
 const clock = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+// Between sunset and sunrise? Without HOME_LAT/LON, treat it as "dark" after 5 PM / before 7 AM.
+function isDark(now = new Date()) {
+  const loc = home();
+  if (!loc) return now.getHours() >= 17 || now.getHours() < 7;
+  const t = sunTimes(now, loc.lat, loc.lon);
+  return !(t.sunrise && t.sunset) || now < t.sunrise || now > t.sunset;
+}
+const conditionsMet = (rule, now) => !rule.conditions?.dark || isDark(now);
+
 const duration = (ms) => {
   const m = Math.round(ms / 60000);
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
@@ -84,6 +104,12 @@ function describeTrigger(rule, now = new Date()) {
     const [h, m] = (t.at || '0:00').split(':').map(Number);
     return `${clock(new Date(2000, 0, 1, h, m))}${days}`;
   }
+  const dark = rule.conditions?.dark ? ', after dark' : '';
+  if (t.type === 'presence') {
+    const who = t.who === 'everyone' ? 'everyone' : t.who === 'anyone' || !t.who ? 'anyone' : t.who;
+    if (t.event === 'leave') return `When ${who === 'everyone' ? 'the last person leaves' : `${who} leaves`}${dark}`;
+    return `When ${who === 'anyone' ? 'someone' : who} gets home${dark}`;
+  }
   if (t.type === 'sun') {
     const off = Number(t.offsetMin) || 0;
     const label = `${t.event === 'sunrise' ? 'Sunrise' : 'Sunset'}${off ? ` ${off > 0 ? '+' : '−'}${Math.abs(off)} min` : ''}`;
@@ -95,14 +121,38 @@ function describeTrigger(rule, now = new Date()) {
 }
 
 async function fire(rule, { source = 'rule', reason } = {}) {
+  let r;
   if (rule.action?.scene) {
     const scene = scenes.find(rule.action.scene);
-    if (!scene) return activity.log({ source, title: `Rule: ${rule.name}`, results: [`error: scene "${rule.action.scene}" not found`] });
-    const r = await scenes.activate(scene, { source, reason: reason || `Rule: ${rule.name}` });
-    return r;
+    r = scene ? await scenes.activate(scene, { source, reason: reason || `Rule: ${rule.name}` })
+      : activity.log({ source, title: `Rule: ${rule.name}`, results: [`error: scene "${rule.action.scene}" not found`] });
+  } else {
+    r = activity.log({ source, title: `Rule: ${rule.name}`, results: await runActions(rule.action?.actions || []), detail: reason });
   }
-  const results = await runActions(rule.action?.actions || []);
-  return activity.log({ source, title: `Rule: ${rule.name}`, results, detail: reason });
+  if (r && r.ok === false && source === 'rule') {          // unattended run went wrong: tell someone
+    const failed = (r.results || []).filter((x) => /error|not |missed|0\/[1-9]/i.test(x));
+    notify({ title: `Rule partly failed: ${rule.name}`, message: failed.join('\n') || 'see Activity', category: 'rules', priority: 3, tags: ['warning'] });
+  }
+  return r;
+}
+
+// Presence events from lib/presence.js
+const lastPresenceFire = {};
+async function handlePresence({ event, person, firstHome, everyoneGone }, now = new Date()) {
+  const ran = [];
+  for (const rule of list()) {
+    const t = rule.trigger || {};
+    if (!rule.enabled || t.type !== 'presence' || t.event !== event) continue;
+    const who = t.who || 'anyone';
+    const match = who === 'anyone' || who === person.id || (who === 'everyone' && everyoneGone)
+      || (who === 'first' && firstHome);
+    if (!match || !conditionsMet(rule, now)) continue;
+    if (now - (lastPresenceFire[rule.id] || 0) < PRESENCE_COOLDOWN_MS) continue;
+    lastPresenceFire[rule.id] = now.getTime();
+    ran.push(rule.id);
+    await fire(rule, { reason: `Rule: ${rule.name} (${person.name} ${event === 'arrive' ? 'got home' : 'left'})` });
+  }
+  return ran;
 }
 
 // One scheduler pass. Exported for tests; `now` injectable.
@@ -122,7 +172,7 @@ async function tick(now = new Date(), { since } = {}) {
     const at = triggerTimeToday(rule, now);
     if (!at) continue;
     const late = now - at;
-    if (late < 0) continue;
+    if (late < 0 || !conditionsMet(rule, now)) continue;
     if (late > CATCH_UP_MS) {
       if (since && at > since) {
         fired[rule.id] = today;
@@ -156,4 +206,4 @@ function startScheduler({ intervalMs = 30_000 } = {}) {
   console.log(`Rule scheduler on (every ${intervalMs / 1000}s)${home() ? '' : ' (sun rules off: set HOME_LAT/HOME_LON)'}`);
 }
 
-module.exports = { list, get, setEnabled, fire, tick, triggerTimeToday, describeTrigger, startScheduler, DEFAULT_RULES };
+module.exports = { list, get, setEnabled, fire, tick, handlePresence, isDark, triggerTimeToday, describeTrigger, startScheduler, DEFAULT_RULES };
