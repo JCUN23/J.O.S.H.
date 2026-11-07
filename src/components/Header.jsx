@@ -71,12 +71,12 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
             <div className="hud-wordmark">J.O.S.H.</div>
             <div className={`text-sm ${text_700}`}>Joint Operations & Systems Hub v1.0</div>
         </div>
-        <div className="text-right flex relative">
+        <div className="text-right flex items-center relative">
             {/* Widget Visibility Dropdown */}
             <div className="relative mr-4" ref={dropdownRef}>
                 <button
                     onClick={() => setShowWidgetMenu(!showWidgetMenu)}
-                    className={`z-50 rounded py-1 px-4 shadow-lg border ${border} ${text_400} hover:bg-${theme}-600 hover:scale-105 transition-all`}
+                    className={`z-50 h-14 inline-flex items-center rounded px-4 shadow-lg border ${border} ${text_400} hover:bg-${theme}-600 hover:scale-105 transition-all`}
                     aria-label="Widget Settings"
                 >
                     <Settings size={20} className={`inline-block mr-2 text-${theme}-400`} />Widgets
@@ -129,16 +129,16 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
             </div>
 
             <button onClick={handleLockClick}
-                className={`mr-4 z-50 rounded py-1 px-4 shadow-lg border ${border} rounded ${text_400} hover:bg-${theme}-600 ${registeredFaces.length === 0 ? 'cursor-not-allowed opacity-50' : 'hover:scale-105 transition-all'}`}
+                className={`mr-4 z-50 h-14 inline-flex items-center rounded px-4 shadow-lg border ${border} ${text_400} hover:bg-${theme}-600 ${registeredFaces.length === 0 ? 'cursor-not-allowed opacity-50' : 'hover:scale-105 transition-all'}`}
                 aria-label="Lock UI"
             >
                 <Lock size={20} className={`inline-block mr-2 text-${theme}-400`} />Lock
             </button>
-            <div className={`items-left pr-4 border-r ${border} mr-4 `}>
-                <button className={`p-4 border ${border} rounded text-${theme}-400`} onClick={updateTheme}>Color</button>
+            <div className={`flex items-center gap-2 pr-4 border-r ${border} mr-4`}>
+                <button className={`h-14 px-4 inline-flex items-center border ${border} rounded text-${theme}-400`} onClick={updateTheme}>Color</button>
                 <button
                     onClick={toggleMode}
-                    className={`ml-2 p-4 border ${border} rounded text-${theme}-400`}
+                    className={`h-14 w-14 inline-flex items-center justify-center border ${border} rounded text-${theme}-400`}
                     aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                     title={mode === 'dark' ? 'Light mode' : 'Dark mode'}
                 >
