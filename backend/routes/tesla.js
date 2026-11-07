@@ -60,7 +60,19 @@ const COMMANDS = {
   honk: () => 'honk_horn',
 };
 
+// Set up = a real developer app (not the .env.example placeholders).
+const { isPlaceholder } = require('../lib/env');
+const teslaConfigured = () => Boolean(process.env.TESLA_CLIENT_ID && process.env.TESLA_CLIENT_SECRET
+  && !isPlaceholder(process.env.TESLA_CLIENT_ID) && !isPlaceholder(process.env.TESLA_CLIENT_SECRET));
+
+router.get('/api/tesla/status', (req, res) => {
+  res.json({ configured: teslaConfigured(), connected: teslaConfigured() && store.isConnected('tesla') });
+});
+
 router.get('/auth/tesla', (req, res) => {
+  if (!teslaConfigured()) {
+    return res.status(503).type('text/plain').send("Tesla isn't set up: TESLA_CLIENT_ID / TESLA_CLIENT_SECRET in backend/.env are missing or still the example placeholders. It needs a Tesla developer app (developer.tesla.com).");
+  }
   const params = new URLSearchParams({
     client_id: process.env.TESLA_CLIENT_ID,
     redirect_uri: TESLA_REDIRECT_URI,

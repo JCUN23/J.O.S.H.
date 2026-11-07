@@ -16,6 +16,10 @@ const INTEGRATIONS = [
 ];
 
 const has = (k) => typeof process.env[k] === 'string' && process.env[k].trim() !== '';
+// Values copied from .env.example and never filled in ("your_tesla_client_id") count as
+// missing: otherwise the check says ✅ and the provider fails later with a cryptic error.
+const isPlaceholder = (v) => /^\s*(your[_-]|<|changeme|xxx+|placeholder)/i.test(String(v || ''));
+const set = (k) => has(k) && !isPlaceholder(process.env[k]);
 
 function checkUrl(key, errors, { originOnly = false } = {}) {
   const v = process.env[key];
@@ -64,14 +68,17 @@ function validateEnv() {
 
   const status = INTEGRATIONS.map(({ name, all, any }) => {
     const groups = any || [all];
-    const ok = groups.some((g) => g.every(has));
+    const ok = groups.some((g) => g.every(set));
     const missing = ok ? [] : groups[0].filter((k) => !has(k));
-    return { name, enabled: ok, missing };
+    const placeholders = ok ? [] : groups[0].filter((k) => has(k) && isPlaceholder(process.env[k]));
+    return { name, enabled: ok, missing, placeholders };
   });
 
   console.log('\nIntegrations:');
   for (const s of status) {
-    console.log(`  ${s.enabled ? '✅' : '⚠️ '} ${s.name}${s.enabled ? '' : `  (missing: ${s.missing.join(', ')})`}`);
+    const why = [s.missing.length && `missing: ${s.missing.join(', ')}`,
+      s.placeholders.length && `still the example placeholder: ${s.placeholders.join(', ')}`].filter(Boolean).join('; ');
+    console.log(`  ${s.enabled ? '✅' : '⚠️ '} ${s.name}${s.enabled ? '' : `  (${why})`}`);
   }
   console.log('');
 
@@ -83,4 +90,4 @@ function validateEnv() {
   return status;
 }
 
-module.exports = { validateEnv, findUnparsedLines, INTEGRATIONS };
+module.exports = { validateEnv, findUnparsedLines, INTEGRATIONS, isPlaceholder };

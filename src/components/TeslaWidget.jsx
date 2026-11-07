@@ -8,6 +8,17 @@ const TeslaWidget = ({ theme }) => {
     const [vehicleData, setVehicleData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [configured, setConfigured] = useState(null);     // null = checking
+
+    // Is there a real Tesla developer app behind this? (Placeholders in .env = no.)
+    useEffect(() => {
+        let alive = true;
+        fetch(`${BACKEND_URL}/api/tesla/status`)
+            .then((r) => (r.ok ? r.json() : { configured: false }))
+            .then((s) => { if (alive) setConfigured(Boolean(s.configured)); })
+            .catch(() => { if (alive) setConfigured(false); });
+        return () => { alive = false; };
+    }, []);
 
     useEffect(() => {
         checkConnection();
@@ -93,19 +104,25 @@ const TeslaWidget = ({ theme }) => {
 
     if (!isConnected) {
         return (
-            <div className={`bg-gradient-to-r from-${theme}-100 to-${theme}-200 border border-${theme}-800 rounded-lg p-6`}>
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <Car className={`text-${theme}-400`} size={24} />
-                        <h2 className={`text-xl font-semibold text-${theme}-400`}>TESLA</h2>
-                    </div>
+            <div className={`bg-${theme}-950/30 border border-${theme}-800 rounded-lg p-3`}>
+                <div className="flex items-center gap-2 mb-3">
+                    <Car className={`text-${theme}-400`} size={20} />
+                    <h3 className={`text-lg font-semibold text-${theme}-400`}>TESLA</h3>
                 </div>
-                <button
-                    onClick={handleConnect}
-                    className={`w-full bg-${theme}-700 hover:bg-${theme}-600 text-white py-3 px-4 rounded-lg transition-all`}
-                >
-                    Connect Tesla Account
-                </button>
+                {configured === false ? (
+                    <div className={`text-xs text-${theme}-600 space-y-2`}>
+                        <p>Not set up yet. Tesla&apos;s API needs a Tesla developer app, a public HTTPS domain for its key file, and a card on file (personal use normally stays inside Tesla&apos;s $10/month credit).</p>
+                        <p>Until then you can hide this card: Widgets → Tesla.</p>
+                    </div>
+                ) : (
+                    <button
+                        onClick={handleConnect}
+                        disabled={configured === null}
+                        className={`w-full bg-${theme}-700 hover:bg-${theme}-600 text-white py-2.5 px-4 rounded transition-all disabled:opacity-40`}
+                    >
+                        Connect Tesla Account
+                    </button>
+                )}
             </div>
         );
     }
