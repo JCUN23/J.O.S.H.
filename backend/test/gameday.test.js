@@ -121,6 +121,8 @@ test('pickTvApp: per-team override, then network map, then default', () => {
   assert.equal(gameDay.pickTvApp(lions, ['NBC', 'Peacock']).app, 'Peacock');
   assert.equal(gameDay.pickTvApp(findTeam('michigan basketball'), ['TNT', 'truTV']).app, 'HBO Max|Max');
   assert.equal(gameDay.pickTvApp(barca, ['ESPN+']).app, 'ESPN');
+  assert.equal(gameDay.pickTvApp(lions, ['HBO Max']).app, 'HBO Max|Max');
+  assert.equal(gameDay.pickTvApp(lions, ['Max']).app, 'HBO Max|Max');
   assert.match(gameDay.pickTvApp(lions, ['FOX']).why, /game is on FOX/);
   process.env.GAMEDAY_TV_APP_BARCELONA = 'ESPN';
   assert.equal(gameDay.pickTvApp(barca, ['CBS Sports Network']).app, 'ESPN', 'override wins');

@@ -23,13 +23,13 @@ const setGoveeColors = (colors) => devices.goveeApply({ colorFor: alternate(colo
 const setHueColors = (colors) => devices.hueApply({ lightIds: HUE_LIGHTS, colorFor: alternate(colors) });
 // ---------- which streaming app ----------
 // ESPN lists each game's networks. A game on Peacock opens Peacock, ESPN+ opens the ESPN
-// app, TNT/truTV/TBS open HBO Max, anything else (FOX, CBS, BTN, ESPN, FanDuel Sports...)
+// app, HBO Max or TNT/truTV/TBS open HBO Max, anything else (FOX, CBS, BTN, ESPN, FanDuel Sports...)
 // opens Fubo. First matching entry wins; `*` is the fallback; `A|B` tries app names in turn.
 //   GAMEDAY_TV_NETWORK_APPS="ESPN+=ESPN,Peacock=Peacock,*=fubo"   replace the whole map
 //   GAMEDAY_TV_APP_BARCELONA=ESPN                                 per-team override (wins)
 //   GAMEDAY_TV_APP=fubo                                           used when the networks are unknown
 //   GAMEDAY_TV_MUTE=false                                         leave the sound alone
-const DEFAULT_NETWORK_APPS = 'ESPN+=ESPN,Peacock=Peacock,NBC=Peacock,TNT=HBO Max|Max,truTV=HBO Max|Max,TBS=HBO Max|Max,*=fubo';
+const DEFAULT_NETWORK_APPS = 'ESPN+=ESPN,Peacock=Peacock,NBC=Peacock,HBO Max=HBO Max|Max,Max=HBO Max|Max,TNT=HBO Max|Max,truTV=HBO Max|Max,TBS=HBO Max|Max,*=fubo';
 const norm = (x) => String(x).toLowerCase().replace(/\s+/g, '');
 
 // Network names from an ESPN event (schedule and scoreboard feeds shape these differently)
