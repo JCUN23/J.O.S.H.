@@ -66,6 +66,8 @@ const BatcomputerHub = () => {
   const [layoutEditing, setLayoutEditing] = useState(false);
   const toggleIdle = () => { const next = !idleEnabled; setIdleEnabled(next); setIdleEnabledState(next); };
   const [wakeWordActive, setWakeWordActive] = useState(false); // Is always-on listening active?
+  const [voiceError, setVoiceError] = useState('');          // why the mic isn't hearing you, in words
+  const voiceBlockedRef = useRef(false);                     // fatal mic error: stop auto-restarting until a tap
 
   const { profileData } = useProfile();
 
@@ -565,6 +567,7 @@ const BatcomputerHub = () => {
     instance.lang = 'en-US';
 
     instance.onresult = (event) => {
+      setVoiceError('');
       // Build full transcript from all results
       let fullTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -675,16 +678,24 @@ const BatcomputerHub = () => {
       if (event.error === 'aborted') return;
 
       if (event.error === 'no-speech') {
-        // No speech detected - this is normal, just restart
-        console.log('[Sentinel] No speech detected, will restart...');
+        // Wake-word mode: silence is normal, it just restarts. A tapped mic hearing
+        // nothing usually means Chrome is listening to the wrong (or a muted) mic.
+        if (!forWakeWord) setVoiceError("Didn't hear anything. Check which mic Chrome is using (mic icon in the address bar) and that your computer's input isn't muted.");
         return;
       }
 
       if (event.error === 'network') {
-        console.error('[Sentinel] Network error - check internet connection');
+        setVoiceError("Can't reach Chrome's speech service (it runs on Google's servers). Check the internet connection.");
         return;
       }
 
+      const why = {
+        'audio-capture': 'No microphone found. Plug one in or pick one: mic icon in the address bar, or your computer\'s sound input settings.',
+        'not-allowed': 'Microphone is blocked for Sentinel. Click the icon left of the address bar and allow Microphone, then tap the mic again.',
+        'service-not-allowed': 'Speech recognition is blocked in this browser. Allow the microphone for this site, then tap the mic again.',
+      }[event.error] || `Voice stopped (${event.error}). Tap the mic to try again.`;
+      setVoiceError(why);
+      voiceBlockedRef.current = true;                        // don't spin restarting into the same error
       console.error('Speech recognition error:', event.error);
       isListeningRef.current = false;
       setListening(false);
@@ -694,7 +705,7 @@ const BatcomputerHub = () => {
     instance.onend = () => {
       // Auto-restart in wake word mode, but not if we're currently processing
       // (processVoiceCommand manually stops/starts recognition to avoid feedback)
-      if (forWakeWord && wakeWordEnabledRef.current && !processingRef.current) {
+      if (forWakeWord && wakeWordEnabledRef.current && !processingRef.current && !voiceBlockedRef.current) {
         // Immediate restart to minimize gaps
         console.log('[Sentinel] Recognition ended, restarting immediately...');
         // Use requestAnimationFrame for faster restart
@@ -711,7 +722,8 @@ const BatcomputerHub = () => {
                   try {
                     recognitionRef.current.start();
                   } catch {
-                    console.log('[Sentinel] Could not restart, will try on next cycle');
+                    console.log('[Sentinel] Could not restart; tap the mic to revive it');
+                    setWakeWordActive(false);                // so the mic button knows to restart it
                   }
                 }
               }, 500);
@@ -751,6 +763,7 @@ const BatcomputerHub = () => {
     }
 
     try {
+      voiceBlockedRef.current = false;
       recognitionRef.current.start();
       setWakeWordActive(true);
       console.log('[Sentinel] Wake word listening started');
@@ -837,6 +850,9 @@ const BatcomputerHub = () => {
         awaitingCommandRef.current = false;
         setTranscript('');
       } else {
+        // The background listener may have died (mic error, laptop slept, tab in the
+        // background). Restart it, or the button shows "listening" with nobody listening.
+        if (!wakeWordActive) { setVoiceError(''); startWakeWordListening(); }
         // In wake word mode, button can be used to manually trigger command mode
         playWakeSound();
         setAwaitingCommand(true);
@@ -878,9 +894,17 @@ const BatcomputerHub = () => {
         return;
       }
       isListeningRef.current = true;
+      voiceBlockedRef.current = false;
       setTranscript('');
       setResponse('');
-      recognitionRef.current.start();
+      setVoiceError('');
+      try {
+        recognitionRef.current.start();
+      } catch {
+        // A stale instance throws if it's still running: start a fresh one
+        recognitionRef.current = createRecognition(false);
+        recognitionRef.current.start();
+      }
       setListening(true);
     }
   };
@@ -972,6 +996,7 @@ const BatcomputerHub = () => {
               wakeWordActive={wakeWordActive}
               awaitingCommand={awaitingCommand}
               toggleWakeWordMode={toggleWakeWordMode}
+              voiceError={voiceError}
             />
           </div>
 

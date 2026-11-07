@@ -13,7 +13,8 @@ const VoiceAssistant = ({
     wakeWordEnabled,
     wakeWordActive,
     awaitingCommand,
-    toggleWakeWordMode
+    toggleWakeWordMode,
+    voiceError
 }) => {
     // Determine button state and text
     const getButtonState = () => {
@@ -120,6 +121,12 @@ const VoiceAssistant = ({
                     </button>
                 </div>
             </div>
+
+            {voiceError && (
+                <div role="alert" className="bg-red-950/40 border border-red-800 text-red-300 rounded p-3 mb-3 text-sm">
+                    {voiceError}
+                </div>
+            )}
 
             {transcript && (
                 <div className="bg-black/50 border border-cyan-700 rounded p-4 mb-3">
