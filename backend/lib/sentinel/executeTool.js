@@ -357,8 +357,7 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
         else if (args.action === 'off') out.push(`${tv.name}: ${await frame.powerOff(tv)}`);
         else if (args.action === 'art_mode_on' || args.action === 'art_mode_off') {
           await frame.powerOn(tv);
-          await frame.setArtMode(tv, args.action === 'art_mode_on');
-          out.push(`${tv.name}: art mode ${args.action === 'art_mode_on' ? 'on' : 'off'}`);
+          out.push(`${tv.name}: ${await frame.ensureArtMode(tv, args.action === 'art_mode_on')}`);
         } else if (args.action === 'volume') {
           const steps = Math.min(Math.abs(parseInt(args.value, 10) || 3), 15);
           const up = !String(args.value || '').startsWith('-');

@@ -136,35 +136,110 @@ async function remoteRequest(tv, event, data, { timeoutMs = 5000 } = {}) {
   });
 }
 
-const appCache = {};   // tv.id -> { at, apps }
-async function getApps(tv, { fresh = false } = {}) {
-  const c = appCache[tv.id];
-  if (!fresh && c && Date.now() - c.at < 3600_000) return c.apps;
-  const data = await remoteRequest(tv, 'ed.installedApp.get');
-  const apps = (data?.data || data || []).map((a) => ({ id: a.appId, name: a.name, type: a.app_type }))
-    .filter((a) => a.id && a.name).sort((a, b) => a.name.localeCompare(b.name));
-  appCache[tv.id] = { at: Date.now(), apps };
+// Newer firmware (2024+ Frames included) ignores ed.installedApp.get, but still launches
+// an app by id. So: ask the TV first, fall back to this table. Newest id first where an
+// app has had several. Sources: samsung-tv-ws-api APPLICATIONS.md, rs.ltd Samsung app ids.
+// Fubo's id is from forum posts only. Add or override: FRAME_TV_APP_IDS="Fubo=123;Max=456"
+const KNOWN_APPS = [
+  { name: 'HBO Max', aliases: ['max', 'hbomax'], ids: ['3202301029760', '3201601007230'] },
+  { name: 'Peacock', aliases: ['peacock tv'], ids: ['3202006020991'] },
+  { name: 'ESPN', aliases: ['espn+', 'espn plus'], ids: ['3201708014618'] },
+  { name: 'Fubo', aliases: ['fubotv', 'fubo tv'], ids: ['3201903017953'] },
+  { name: 'Netflix', aliases: [], ids: ['3201907018807', '11101200001'] },
+  { name: 'YouTube', aliases: [], ids: ['111299001912'] },
+  { name: 'YouTube TV', aliases: [], ids: ['3201707014489'] },
+  { name: 'Prime Video', aliases: ['amazon prime', 'prime'], ids: ['3201910019365', '3201512006785'] },
+  { name: 'Disney+', aliases: ['disney plus', 'disney'], ids: ['3202204027038', '3202009021709', '3201901017640'] },
+  { name: 'Hulu', aliases: [], ids: ['3201601007625'] },
+  { name: 'Paramount+', aliases: ['paramount plus', 'paramount'], ids: ['3202110025305', '3201710014981'] },
+  { name: 'Apple TV', aliases: [], ids: ['3201807016597'] },
+  { name: 'Plex', aliases: [], ids: ['3201512006963'] },
+];
+
+function knownApps() {
+  const apps = KNOWN_APPS.map((a) => ({ ...a, ids: [...a.ids] }));
+  for (const pair of (process.env.FRAME_TV_APP_IDS || '').split(';').map((x) => x.trim()).filter(Boolean)) {
+    const i = pair.indexOf('=');
+    if (i < 1) continue;
+    const name = pair.slice(0, i).trim();
+    const ids = pair.slice(i + 1).split(',').map((x) => x.trim()).filter(Boolean);
+    const hit = apps.find((a) => a.name.toLowerCase() === name.toLowerCase() || a.aliases.includes(name.toLowerCase()));
+    if (hit) hit.ids = ids; else apps.push({ name, aliases: [], ids });
+  }
   return apps;
 }
 
-// "YouTube TV", "peacock", or a raw app id. Exact name first, then starts-with, then contains.
+const appCache = {};   // tv.id -> { at, apps, source }
+// -> { source: 'tv' | 'built-in', apps: [{ name, ids, type? }] }
+async function getApps(tv, { fresh = false } = {}) {
+  const c = appCache[tv.id];
+  if (!fresh && c && Date.now() - c.at < 3600_000) return c;
+  let entry;
+  try {
+    const data = await remoteRequest(tv, 'ed.installedApp.get', undefined, { timeoutMs: 3000 });
+    const apps = (data?.data || data || []).filter((a) => a.appId && a.name)
+      .map((a) => ({ name: a.name, ids: [a.appId], type: a.app_type, aliases: [] }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    entry = { at: Date.now(), source: 'tv', apps };
+  } catch {
+    entry = { at: Date.now(), source: 'built-in', apps: knownApps() };
+  }
+  appCache[tv.id] = entry;
+  return entry;
+}
+
+// "YouTube TV", "max", or a raw id. Exact name/alias first, then starts-with, then contains.
 async function findApp(tv, query) {
   const q = String(query).trim().toLowerCase();
-  const apps = await getApps(tv);
-  return apps.find((a) => a.id.toLowerCase() === q || a.name.toLowerCase() === q)
+  const { apps } = await getApps(tv);
+  if (/^[\w.]+$/.test(q) && /\d{6,}|\./.test(q) && !apps.some((a) => a.name.toLowerCase() === q)) {
+    const owner = apps.find((a) => a.ids.includes(query.trim()));
+    return owner ? { ...owner, ids: [query.trim()] } : { name: query.trim(), ids: [query.trim()], aliases: [] };
+  }
+  return apps.find((a) => a.name.toLowerCase() === q || a.aliases?.includes(q))
     || apps.find((a) => a.name.toLowerCase().startsWith(q))
     || apps.find((a) => a.name.toLowerCase().includes(q)) || null;
+}
+
+// REST app state: 'running' | 'installed' | 'missing' | 'unknown' (REST locked on some firmware)
+async function appState(tv, id) {
+  try {
+    const { data } = await axios.get(`http://${tv.host}:${opt().httpPort}/api/v2/applications/${id}`, { timeout: 2500 });
+    return data?.running ? 'running' : 'installed';
+  } catch (err) {
+    return err.response?.status === 404 ? 'missing' : 'unknown';
+  }
 }
 
 async function launchApp(tv, query) {
   let app = null;
   for (const q of String(query).split('|')) { app = await findApp(tv, q); if (app) break; }  // "HBO Max|Max"
   if (!app) throw new Error(`no app matching "${query}" on the TV`);
-  // Tizen: type 4 apps launch natively, the rest via deep link (what samsungtvws does too)
-  const data = { appId: app.id, action_type: app.type === 4 ? 'NATIVE_LAUNCH' : 'DEEP_LINK', metaTag: '' };
-  try { await remoteRequest(tv, 'ed.apps.launch', data, { timeoutMs: 4000 }); }
-  catch { /* some firmware launches without replying */ }
-  return app.name;
+  let missing = 0;
+  for (const id of app.ids) {
+    if ((await appState(tv, id)) === 'missing') { missing++; continue; }   // wrong id for this model
+    // Tizen: type 4 apps launch natively, the rest via deep link (what samsungtvws does too)
+    const data = { appId: id, action_type: app.type === 4 ? 'NATIVE_LAUNCH' : 'DEEP_LINK', metaTag: '' };
+    try { await remoteRequest(tv, 'ed.apps.launch', data, { timeoutMs: 3000 }); }
+    catch { /* many TVs launch without replying */ }
+    await delay(opt().settleMs);
+    const st = await appState(tv, id);
+    if (st === 'running') return app.name;
+    if (st === 'unknown') return `${app.name} (sent; TV doesn't confirm launches)`;
+  }
+  throw new Error(missing === app.ids.length
+    ? `${app.name} isn't installed on the TV (or its app id changed: set FRAME_TV_APP_IDS)`
+    : `${app.name} didn't start`);
+}
+
+// Art mode only when it needs changing: some firmware never answers a request for the
+// state it's already in (Nov 6: "TV didn't answer art request set_artmode_status").
+async function ensureArtMode(tv, on) {
+  let current = null;
+  try { current = await getArtMode(tv); } catch { /* status unsupported: just try */ }
+  if (current === (on ? 'on' : 'off')) return on ? 'art mode (already)' : 'art already off';
+  await setArtMode(tv, on);
+  return on ? 'art mode' : 'art off';
 }
 
 // ---------- mute ----------
@@ -262,7 +337,7 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
     return did;
   }
   if (artMode !== undefined) {
-    try { await setArtMode(tv, artMode); did.push(artMode ? 'art mode' : 'art off'); }
+    try { did.push(await ensureArtMode(tv, artMode)); }
     catch (err) { did.push(`art mode: ${err.message}`); }      // keep going: the app/mute still matter
   }
   if (app) {
@@ -289,4 +364,4 @@ async function apply(opts) {
 const KEYS = ['KEY_VOLUP', 'KEY_VOLDOWN', 'KEY_MUTE', 'KEY_HOME', 'KEY_RETURN', 'KEY_SOURCE', 'KEY_HDMI',
   'KEY_PLAY', 'KEY_PAUSE', 'KEY_UP', 'KEY_DOWN', 'KEY_LEFT', 'KEY_RIGHT', 'KEY_ENTER'];
 
-module.exports = { configured, find, status, pair, sendKey, getArtMode, setArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KEYS };
+module.exports = { configured, find, status, pair, sendKey, getArtMode, setArtMode, ensureArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KNOWN_APPS, KEYS };

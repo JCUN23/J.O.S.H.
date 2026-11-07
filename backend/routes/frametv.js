@@ -18,7 +18,7 @@ const withTv = (handler) => async (req, res) => {
 };
 
 // Installed apps, so Game Day / scenes can name one (GAMEDAY_TV_APP=YouTube TV)
-router.get('/api/frametv/:id/apps', withTv(async (tv, req) => ({ apps: await frame.getApps(tv, { fresh: req.query.fresh === '1' }) })));
+router.get('/api/frametv/:id/apps', withTv(async (tv, req) => frame.getApps(tv, { fresh: req.query.fresh === '1' })));
 
 router.post('/api/frametv/:id/pair', withTv(async (tv) => {
   const paired = await frame.pair(tv);
@@ -29,8 +29,8 @@ router.post('/api/frametv/:id/pair', withTv(async (tv) => {
 const ACTIONS = {
   'power-on': (tv) => frame.powerOn(tv),
   'power-off': (tv) => frame.powerOff(tv),
-  'art-on': async (tv) => { await frame.powerOn(tv); await frame.setArtMode(tv, true); return 'art mode'; },
-  'art-off': async (tv) => { await frame.powerOn(tv); await frame.setArtMode(tv, false); return 'art off'; },
+  'art-on': async (tv) => { await frame.powerOn(tv); return frame.ensureArtMode(tv, true); },
+  'art-off': async (tv) => { await frame.powerOn(tv); return frame.ensureArtMode(tv, false); },
 };
 
 router.post('/api/frametv/:id/command', withTv(async (tv, req) => {

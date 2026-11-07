@@ -11,7 +11,7 @@ const dir = tempStores();
 process.env.ACTIVITY_STORE_PATH = path.join(dir, 'activity.json');
 
 // ---- fake TV ----
-const tv = { wolWorks: true, infoBudget: Infinity, launched: [], muted: false, upnp: true, power: 'standby', art: 'off', keys: [], allow: true, wol: 0, token: 'tok-123' };
+const tv = { appListWorks: true, installed: new Set(['3201907018807', 'PvWgqxV3Xa.YouTubeTV', '111299001912', 'org.tizen.browser', '3201601007230']), running: new Set(), wolWorks: true, infoBudget: Infinity, launched: [], muted: false, upnp: true, power: 'standby', art: 'off', keys: [], allow: true, wol: 0, token: 'tok-123' };
 const httpSrv = http.createServer((req, res) => {
   if (req.url === '/upnp/control/RenderingControl1') {
     let body = ''; req.on('data', (c) => { body += c; });
@@ -21,7 +21,15 @@ const httpSrv = http.createServer((req, res) => {
     });
     return;
   }
-  if (tv.power === 'off' || tv.infoBudget-- <= 0) { req.socket.destroy(); return; }
+  if (tv.power === 'off') { req.socket.destroy(); return; }
+  const appMatch = /^\/api\/v2\/applications\/(.+)$/.exec(req.url);
+  if (appMatch) {
+    res.setHeader('Content-Type', 'application/json');
+    if (!tv.installed.has(appMatch[1])) { res.statusCode = 404; res.end('{}'); return; }
+    res.end(JSON.stringify({ id: appMatch[1], running: tv.running.has(appMatch[1]) }));
+    return;
+  }
+  if (tv.infoBudget-- <= 0) { req.socket.destroy(); return; }
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify({ device: { PowerState: tv.power, wifiMac: 'AA:BB:CC:DD:EE:FF', modelName: 'QN55LS03DAFXZA', FrameTVSupport: 'true' } }));
 });
@@ -37,6 +45,7 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (raw) => {
     const msg = JSON.parse(raw);
     if (msg.params?.event === 'ed.installedApp.get') {
+      if (!tv.appListWorks) return;                       // 2024+ firmware: silence
       ws.send(JSON.stringify({ event: 'ed.installedApp.get', data: { data: [
         { appId: '3201907018807', name: 'Netflix', app_type: 2 },
         { appId: 'PvWgqxV3Xa.YouTubeTV', name: 'YouTube TV', app_type: 2 },
@@ -47,6 +56,7 @@ wss.on('connection', (ws, req) => {
     }
     if (msg.params?.event === 'ed.apps.launch') {
       tv.launched.push(`${msg.params.data.appId}:${msg.params.data.action_type}`);
+      if (tv.installed.has(msg.params.data.appId)) tv.running.add(msg.params.data.appId);
       ws.send(JSON.stringify({ event: 'ed.apps.launch', data: 200 }));
       return;
     }
@@ -59,7 +69,10 @@ wss.on('connection', (ws, req) => {
     const d = JSON.parse(msg.params.data);
     const reply = (data) => ws.send(JSON.stringify({ event: 'd2d_service_message', data: JSON.stringify({ id: d.id, ...data }) }));
     if (d.request === 'get_artmode_status') reply({ event: 'artmode_status', value: tv.art });
-    if (d.request === 'set_artmode_status') { tv.art = d.value; reply({ event: 'art_mode_changed', status: d.value }); }
+    if (d.request === 'set_artmode_status') {
+      if (tv.art === d.value) return;                     // some firmware never answers a no-op
+      tv.art = d.value; reply({ event: 'art_mode_changed', status: d.value });
+    }
   });
 });
 const udp = dgram.createSocket('udp4');
@@ -127,7 +140,9 @@ test('scenes: art mode leaves an off TV alone; power:false holds POWER', async (
 test('apps: listed by name; fuzzy match picks the exact app; native apps launch natively', async () => {
   const office = frame.find('office');
   tv.power = 'on';
-  assert.deepEqual((await frame.getApps(office)).map((a) => a.name), ['Internet', 'Netflix', 'YouTube', 'YouTube TV']);
+  const list = await frame.getApps(office);
+  assert.equal(list.source, 'tv');
+  assert.deepEqual(list.apps.map((a) => a.name), ['Internet', 'Netflix', 'YouTube', 'YouTube TV']);
   assert.equal(await frame.launchApp(office, 'youtube tv'), 'YouTube TV', 'exact name beats "YouTube"');
   assert.equal(await frame.launchApp(office, 'internet'), 'Internet');
   assert.deepEqual(tv.launched.slice(-2), ['PvWgqxV3Xa.YouTubeTV:DEEP_LINK', 'org.tizen.browser:NATIVE_LAUNCH']);
@@ -150,6 +165,24 @@ test('app not on the TV: red error in the result, home screen instead', async ()
   const r = await frame.apply({ power: true, artMode: false, app: 'HBO Max|Max', mute: true });
   assert.match(r, /app error: no app matching "HBO Max\|Max" on the TV, home screen, muted/);
   assert.ok(tv.keys.includes('Click:KEY_HOME'));
+});
+
+test('newer firmware: no app list -> built-in ids; a 404 id is skipped for the next one; art no-op skipped', async () => {
+  const office = frame.find('office');
+  tv.appListWorks = false; tv.power = 'on'; tv.art = 'off'; tv.launched = []; tv.running = new Set();
+  assert.equal((await frame.getApps(office, { fresh: true })).source, 'built-in');
+  // current HBO Max id isn't on this TV (404), the older one is: launches the older one
+  assert.equal(await frame.launchApp(office, 'max'), 'HBO Max');
+  assert.deepEqual(tv.launched, ['3201601007230:DEEP_LINK']);
+  await assert.rejects(frame.launchApp(office, 'Peacock'), /Peacock isn't installed on the TV/);
+  const r = await frame.apply({ power: true, artMode: false, app: 'HBO Max|Max', mute: true });
+  assert.equal(r, 'TV Office: already on, art already off, opened HBO Max, muted', 'no art request the TV would ignore');
+  process.env.FRAME_TV_APP_IDS = 'Peacock=3201907018807';   // override (borrowing an installed id)
+  await frame.getApps(office, { fresh: true });
+  assert.equal(await frame.launchApp(office, 'peacock'), 'Peacock');
+  delete process.env.FRAME_TV_APP_IDS;
+  tv.appListWorks = true;
+  await frame.getApps(office, { fresh: true });
 });
 
 test('mute falls back to the remote key and says it only toggles', async () => {
