@@ -21,13 +21,26 @@ const HUE_LIGHTS = (process.env.HUE_GAMEDAY_LIGHTS || '5,4').split(',').map((s) 
 const alternate = (colors) => (i) => (i % 2 === 0 ? colors.primary : colors.secondary);
 const setGoveeColors = (colors) => devices.goveeApply({ colorFor: alternate(colors) });
 const setHueColors = (colors) => devices.hueApply({ lightIds: HUE_LIGHTS, colorFor: alternate(colors) });
-const wakeFrameTv = () => devices.tvApply({ artMode: false, power: true, home: true });
+// TV: on, out of art mode, into the streaming app for this team (or the default), muted.
+//   GAMEDAY_TV_APP=YouTube TV            default app for every team (name as the TV lists it)
+//   GAMEDAY_TV_APP_PISTONS=FanDuel ...   per-team override (team key, upper-case, - -> _)
+//   GAMEDAY_TV_MUTE=false                leave the sound alone
+// No app configured: just the home screen, like before.
+function tvAppFor(team) {
+  const key = `GAMEDAY_TV_APP_${String(team?.key || '').toUpperCase().replace(/-/g, '_')}`;
+  return process.env[key] || process.env.GAMEDAY_TV_APP || null;
+}
+const wakeFrameTv = (team) => {
+  const app = tvAppFor(team);
+  return devices.tvApply({ power: true, artMode: false, app: app || undefined, home: !app,
+    mute: process.env.GAMEDAY_TV_MUTE === 'false' ? undefined : true });
+};
 
 // Lights (+ TV unless lightsOnly). Each step reports its own result; one failing
 // integration never blocks the others.
 async function activate(team, { lightsOnly = false, reason = 'manual' } = {}) {
   const steps = [setGoveeColors(team.colors), setHueColors(team.colors)];
-  if (!lightsOnly) steps.push(wakeFrameTv());
+  if (!lightsOnly) steps.push(wakeFrameTv(team));
   const results = (await Promise.allSettled(steps)).map((r) =>
     r.status === 'fulfilled' ? r.value : `error: ${r.reason?.response?.data?.message || r.reason?.message}`);
   const entry = { team: team.name, at: new Date().toISOString(), reason, lightsOnly, results };

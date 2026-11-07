@@ -17,6 +17,9 @@ const withTv = (handler) => async (req, res) => {
   catch (err) { res.status(err.status || 502).json({ error: err.message }); }
 };
 
+// Installed apps, so Game Day / scenes can name one (GAMEDAY_TV_APP=YouTube TV)
+router.get('/api/frametv/:id/apps', withTv(async (tv, req) => ({ apps: await frame.getApps(tv, { fresh: req.query.fresh === '1' }) })));
+
 router.post('/api/frametv/:id/pair', withTv(async (tv) => {
   const paired = await frame.pair(tv);
   if (paired) activity.log({ source: 'panel', title: `Paired with ${tv.name} TV`, results: ['TV: paired'] });
@@ -34,6 +37,8 @@ router.post('/api/frametv/:id/command', withTv(async (tv, req) => {
   const { action, key } = req.body || {};
   let result;
   if (ACTIONS[action]) result = await ACTIONS[action](tv);
+  else if (action === 'app' && req.body?.app) { await frame.powerOn(tv); result = `opened ${await frame.launchApp(tv, req.body.app)}`; }
+  else if (action === 'mute' || action === 'unmute') result = await frame.setMute(tv, action === 'mute');
   else if (action === 'key' && frame.KEYS.includes(key)) { await frame.sendKey(tv, key); result = key; }
   else throw Object.assign(new Error(`unknown command ${action}${key ? ` ${key}` : ''}`), { status: 400 });
   return { ok: true, result, status: await frame.status(tv) };
