@@ -34,7 +34,12 @@ const CalendarWidget = ({ theme }) => {
             setEvents(googleEvents);
         } catch (err) {
             console.error('Failed to fetch calendar events:', err);
-            if (err.message?.includes('not connected')) {
+            if (err.code === 'calendar_scope_missing') {
+                // Drop the email-only login so the Connect button comes back
+                await disconnectProvider('google').catch(() => {});
+                setIsConnected(false);
+                setError(err.message);
+            } else if (err.message?.includes('not connected')) {
                 // Server cleared a revoked login: show the connect button
                 setIsConnected(false);
                 setError('Google sign-in expired. Connect again to see events.');
@@ -66,7 +71,8 @@ const CalendarWidget = ({ theme }) => {
                     fetchEvents();
                 } catch (err) {
                     console.error('Token exchange failed:', err);
-                    setError('Failed to connect');
+                    window.history.replaceState({}, '', '/');
+                    setError(err.message || 'Failed to connect');
                 }
             };
 

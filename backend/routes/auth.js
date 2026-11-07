@@ -60,6 +60,12 @@ router.post('/auth/google/token', async (req, res) => {
       grant_type: 'authorization_code'
     });
 
+    // Google's consent screen has a checkbox per permission; an unticked calendar box
+    // yields a login that can only read the email address. Don't keep it: say so.
+    if (!String(tokenResponse.data.scope || '').includes('calendar')) {
+      return res.status(400).json({ error: 'calendar_scope_missing',
+        message: "Google didn't grant calendar access. Connect again and tick the calendar box on Google's permission screen." });
+    }
     const saved = store.set('google', toStored(tokenResponse.data, store.get('google')?.refresh_token));
     res.json(publicView(saved));
   } catch (error) {

@@ -1,6 +1,8 @@
 import { BACKEND_URL } from '../config';
 import { getProviderToken } from './authApi';
 
+export const CALENDAR_SCOPE_MISSING = "Google didn't grant calendar access. Connect again and tick the \u201cSee and download any calendar\u201d box on Google's permission screen.";
+
 // Google Calendar Functions
 // Tokens live on the server (see utils/authApi.js); these helpers just ask for one.
 export async function startGoogleAuth() {
@@ -13,8 +15,9 @@ export async function exchangeGoogleToken(code) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
     });
-    if (!response.ok) throw new Error(`Google sign-in failed (HTTP ${response.status})`);
-    return (await response.json()).access_token;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || `Google sign-in failed (HTTP ${response.status})`);
+    return data.access_token;
 }
 
 export async function getGoogleToken() {
@@ -40,6 +43,10 @@ export async function getGoogleCalendarEvents() {
     const calendarsData = await calendarsResponse.json();
 
     if (calendarsData.error) {
+        // A login made with the calendar box unticked: say what to do, not "403"
+        if (calendarsData.error.status === 'PERMISSION_DENIED' || /insufficient authentication scopes/i.test(calendarsData.error.message || '')) {
+            throw Object.assign(new Error(CALENDAR_SCOPE_MISSING), { code: 'calendar_scope_missing' });
+        }
         throw new Error(calendarsData.error.message || 'Failed to fetch calendars');
     }
 
