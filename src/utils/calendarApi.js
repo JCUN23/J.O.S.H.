@@ -26,14 +26,68 @@ export async function getGoogleToken() {
     return t.access_token;
 }
 
+export const CALENDAR_DAYS = 7;
+
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+// Google sends all-day events as a bare date ("2026-11-07"). new Date() reads that as UTC
+// midnight, which in Detroit is 7 PM the day before. Parse it as a LOCAL date instead.
+function parseWhen(when) {
+    if (when?.dateTime) return { at: new Date(when.dateTime), allDay: false };
+    const [y, m, d] = String(when?.date || '').split('-').map(Number);
+    return { at: new Date(y, (m || 1) - 1, d || 1), allDay: true };
+}
+
+const WEEKDAY = { weekday: 'short' };
+function dayLabel(date, today) {
+    const diff = Math.round((startOfDay(date) - today) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+// Raw Google events (any calendars) -> sorted, de-duplicated rows for the widget.
+// Exported for tests; `now` injectable.
+export function formatEvents(raw, now = new Date()) {
+    const today = startOfDay(now);
+    const seen = new Set();
+    const rows = [];
+    for (const ev of raw) {
+        const key = `${ev.iCalUID || ev.id}|${ev.start?.dateTime || ev.start?.date}`;
+        if (seen.has(key)) continue;                      // same event on two (shared) calendars
+        seen.add(key);
+        const start = parseWhen(ev.start);
+        const end = parseWhen(ev.end);
+        const ongoing = start.at < today;                 // started before today, still running
+        let time;
+        if (start.allDay) {
+            const lastDay = addDays(end.at, -1);          // all-day end dates are exclusive
+            const multi = lastDay > start.at;
+            time = multi ? `All day · thru ${lastDay.toLocaleDateString('en-US', WEEKDAY)}` : 'All day';
+        } else {
+            time = start.at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        }
+        const shown = ongoing ? today : start.at;
+        rows.push({
+            title: ev.summary || '(No title)',
+            time,
+            allDay: start.allDay,
+            sortAt: ongoing ? today.getTime() - 1 : start.at.getTime() - (start.allDay ? 1 : 0),
+            day: ongoing ? 'Today' : dayLabel(shown, today),
+            dayKey: startOfDay(shown).toISOString(),
+            ongoing,
+            calendar: ev.calendarName || 'Google',
+            color: ev.calendarColor || 'blue',
+        });
+    }
+    return rows.sort((a, b) => a.sortAt - b.sortAt);
+}
+
 export async function getGoogleCalendarEvents() {
     const token = await getGoogleToken();
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfTomorrow = new Date();
-    endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
-    endOfTomorrow.setHours(23, 59, 59, 999);
+    const from = startOfDay(new Date());
+    const to = addDays(from, CALENDAR_DAYS);
 
     // First, get list of all calendars
     const calendarsResponse = await fetch(
@@ -50,68 +104,28 @@ export async function getGoogleCalendarEvents() {
         throw new Error(calendarsData.error.message || 'Failed to fetch calendars');
     }
 
-    console.log('Google Calendars:', calendarsData.items?.map(c => c.summary));
-
-    // Fetch events from all calendars
-    const allEvents = [];
-    for (const calendar of calendarsData.items || []) {
+    // Every calendar's events for the window, in parallel
+    const perCalendar = await Promise.all((calendarsData.items || []).map(async (calendar) => {
         try {
             const response = await fetch(
                 `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?${new URLSearchParams({
-                    timeMin: startOfDay.toISOString(),
-                    timeMax: endOfTomorrow.toISOString(),
+                    timeMin: from.toISOString(),
+                    timeMax: to.toISOString(),
                     singleEvents: true,
                     orderBy: 'startTime',
-                    maxResults: 10
+                    maxResults: 100
                 })}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-
             const data = await response.json();
-
-            if (data.items) {
-                data.items.forEach(event => {
-                    allEvents.push({
-                        ...event,
-                        calendarName: calendar.summary,
-                        calendarColor: calendar.backgroundColor
-                    });
-                });
-            }
+            return (data.items || []).map((event) => ({ ...event, calendarName: calendar.summary, calendarColor: calendar.backgroundColor }));
         } catch (err) {
             console.warn(`Failed to fetch events from ${calendar.summary}:`, err);
+            return [];
         }
-    }
+    }));
 
-    console.log('All events:', allEvents);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Sort by start time
-    allEvents.sort((a, b) => {
-        const aTime = new Date(a.start.dateTime || a.start.date);
-        const bTime = new Date(b.start.dateTime || b.start.date);
-        return aTime - bTime;
-    });
-
-    return allEvents.map(event => {
-        const eventDate = new Date(event.start.dateTime || event.start.date);
-        const isToday = eventDate >= today && eventDate < tomorrow;
-
-        return {
-            title: event.summary || '(No title)',
-            time: new Date(event.start.dateTime || event.start.date).toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit'
-            }),
-            day: isToday ? 'Today' : 'Tomorrow',
-            calendar: event.calendarName || 'Google',
-            color: event.calendarColor || 'blue'
-        };
-    });
+    return formatEvents(perCalendar.flat());
 }
 
 // Microsoft Calendar Functions

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, RefreshCw, Loader2 } from 'lucide-react';
+import { Calendar, RefreshCw, Loader2, Unlink } from 'lucide-react';
 import { startGoogleAuth, getGoogleCalendarEvents, exchangeGoogleToken } from '../utils/calendarApi';
 import { getAuthStatus, disconnectProvider } from '../utils/authApi';
 
@@ -105,20 +105,31 @@ const CalendarWidget = ({ theme }) => {
     }
 
     return (
-        <div className={`${bgClass} border ${borderClass} rounded-lg p-6 flex flex-col max-h-80 overflow-hidden`}>
-            <div className="flex items-center justify-between mb-4">
+        <div className={`${bgClass} border ${borderClass} rounded-lg p-3 flex flex-col max-h-96 overflow-hidden`}>
+            <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                     <Calendar className={textClass} size={20} />
                     <h3 className={`text-lg font-semibold text-${theme}-400`}>CALENDAR</h3>
                 </div>
                 {isConnected && (
-                    <button
-                        onClick={fetchEvents}
-                        disabled={loading}
-                        className={`text-${theme}-500 hover:text-${theme}-400 transition-colors`}
-                    >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleDisconnect}
+                            aria-label="Disconnect Google Calendar"
+                            title="Disconnect Google Calendar"
+                            className={`text-${theme}-700 hover:text-${theme}-500 transition-colors`}
+                        >
+                            <Unlink size={14} />
+                        </button>
+                        <button
+                            onClick={fetchEvents}
+                            disabled={loading}
+                            aria-label="Refresh calendar"
+                            className={`text-${theme}-500 hover:text-${theme}-400 transition-colors`}
+                        >
+                            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -143,40 +154,40 @@ const CalendarWidget = ({ theme }) => {
                 </div>
             ) : (
                 <>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                    <div className="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-1">
                         {events.length === 0 ? (
                             <div className={`text-sm text-${theme}-600 text-center py-4`}>
-                                No events for today or tomorrow
+                                Nothing on the calendar this week
                             </div>
                         ) : (
                             events.map((event, idx) => (
+                                <div key={idx}>
+                                {(idx === 0 || events[idx - 1].dayKey !== event.dayKey) && (
+                                    <div className={`text-[10px] uppercase tracking-widest text-${theme}-600 ${idx ? 'pt-2' : ''} pb-1`}>
+                                        {event.day}
+                                    </div>
+                                )}
                                 <div
-                                    key={idx}
-                                    className={`bg-black/50 border ${borderClass} rounded p-3 hover:border-${theme}-600 transition-colors`}
+                                    className={`bg-black/50 border ${borderClass} rounded px-3 py-2 hover:border-${theme}-600 transition-colors`}
                                 >
                                     <div className="flex justify-between items-start gap-2">
                                         <div className="flex-1 min-w-0">
                                             <div className={`font-semibold text-${theme}-300 truncate`}>
                                                 {event.title}
                                             </div>
-                                            <div className={`text-xs text-${theme}-700`}>
-                                                {event.day} · {event.calendar}
+                                            <div className={`text-xs text-${theme}-700 truncate`}>
+                                                {event.ongoing ? 'Ongoing · ' : ''}{event.calendar}
                                             </div>
                                         </div>
-                                        <div className={`text-${theme}-400 text-sm whitespace-nowrap`}>
+                                        <div className={`${event.allDay ? `text-${theme}-600 text-xs` : `text-${theme}-400 text-sm`} whitespace-nowrap`}>
                                             {event.time}
                                         </div>
                                     </div>
                                 </div>
+                                </div>
                             ))
                         )}
                     </div>
-                    <button
-                        onClick={handleDisconnect}
-                        className={`mt-4 text-xs text-${theme}-700 hover:text-${theme}-500 transition-colors`}
-                    >
-                        Disconnect
-                    </button>
                 </>
             )}
         </div>
