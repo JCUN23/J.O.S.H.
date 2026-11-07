@@ -11,7 +11,7 @@ const dir = tempStores();
 process.env.ACTIVITY_STORE_PATH = path.join(dir, 'activity.json');
 
 // ---- fake TV ----
-const tv = { appListWorks: true, installed: new Set(['3201907018807', 'PvWgqxV3Xa.YouTubeTV', '111299001912', 'org.tizen.browser', '3201601007230']), running: new Set(), wolWorks: true, infoBudget: Infinity, launched: [], muted: false, upnp: true, power: 'standby', art: 'off', keys: [], allow: true, wol: 0, token: 'tok-123' };
+const tv = { launchNeeds: null, artGetWorks: true, appListWorks: true, installed: new Set(['3201907018807', 'PvWgqxV3Xa.YouTubeTV', '111299001912', 'org.tizen.browser', '3201601007230']), running: new Set(), wolWorks: true, infoBudget: Infinity, launched: [], muted: false, upnp: true, power: 'standby', art: 'off', keys: [], allow: true, wol: 0, token: 'tok-123' };
 const httpSrv = http.createServer((req, res) => {
   if (req.url === '/upnp/control/RenderingControl1') {
     let body = ''; req.on('data', (c) => { body += c; });
@@ -56,7 +56,8 @@ wss.on('connection', (ws, req) => {
     }
     if (msg.params?.event === 'ed.apps.launch') {
       tv.launched.push(`${msg.params.data.appId}:${msg.params.data.action_type}`);
-      if (tv.installed.has(msg.params.data.appId)) tv.running.add(msg.params.data.appId);
+      const style = msg.params.data.action_type;
+      if (tv.installed.has(msg.params.data.appId) && (!tv.launchNeeds || tv.launchNeeds === style)) tv.running.add(msg.params.data.appId);
       ws.send(JSON.stringify({ event: 'ed.apps.launch', data: 200 }));
       return;
     }
@@ -68,6 +69,7 @@ wss.on('connection', (ws, req) => {
     }
     const d = JSON.parse(msg.params.data);
     const reply = (data) => ws.send(JSON.stringify({ event: 'd2d_service_message', data: JSON.stringify({ id: d.id, ...data }) }));
+    if (d.request === 'get_artmode_status' && !tv.artGetWorks) return;
     if (d.request === 'get_artmode_status') reply({ event: 'artmode_status', value: tv.art });
     if (d.request === 'set_artmode_status') {
       if (tv.art === d.value) return;                     // some firmware never answers a no-op
@@ -89,7 +91,7 @@ test.before(async () => {
   Object.assign(process.env, {
     FRAME_TVS: 'Office@127.0.0.1', FRAME_TV_WS_SCHEME: 'ws', FRAME_TV_WS_PORT: String(port),
     FRAME_TV_HTTP_PORT: String(port), FRAME_TV_WOL_ADDR: '127.0.0.1', FRAME_TV_WOL_PORT: String(udp.address().port),
-    FRAME_TV_BOOT_MS: '3000', FRAME_TV_DMR_PORT: String(port), FRAME_TV_SETTLE_MS: '0',
+    FRAME_TV_BOOT_MS: '3000', FRAME_TV_DMR_PORT: String(port), FRAME_TV_SETTLE_MS: '0', FRAME_TV_APP_WAIT_MS: '600',
   });
   frame = require('../lib/frameTv');
 });
@@ -183,6 +185,20 @@ test('newer firmware: no app list -> built-in ids; a 404 id is skipped for the n
   delete process.env.FRAME_TV_APP_IDS;
   tv.appListWorks = true;
   await frame.getApps(office, { fresh: true });
+});
+
+test('app that ignores deep links starts with the next launch style; silent art status is not a failure', async () => {
+  const office = frame.find('office');
+  tv.power = 'on'; tv.running = new Set(); tv.launched = [];
+  tv.launchNeeds = 'NATIVE_LAUNCH';                   // Nov 6: installed, DEEP_LINK did nothing
+  assert.equal(await frame.launchApp(office, 'Netflix'), 'Netflix');
+  assert.deepEqual(tv.launched, ['3201907018807:DEEP_LINK', '3201907018807:NATIVE_LAUNCH']);
+  tv.launchNeeds = 'NOTHING'; tv.running = new Set();
+  await assert.rejects(frame.launchApp(office, 'Netflix'), /Netflix didn't start \(tried deep link, native, REST\)/);
+  tv.launchNeeds = null;
+  tv.artGetWorks = false; tv.art = 'off';             // TV won't report art state, won't answer a no-op
+  assert.equal(await frame.ensureArtMode(office, false), 'art off sent (TV gave no art status)');
+  tv.artGetWorks = true;
 });
 
 test('mute falls back to the remote key and says it only toggles', async () => {

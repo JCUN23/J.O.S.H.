@@ -117,7 +117,7 @@ async function artRequest(tv, request, extra = {}, { expect = [], timeoutMs = 60
   });
 }
 
-const getArtMode = async (tv) => (await artRequest(tv, 'get_artmode_status', {}, { expect: ['artmode_status'] })).value;
+const getArtMode = async (tv) => (await artRequest(tv, 'get_artmode_status', {}, { expect: ['artmode_status'], timeoutMs: 3500 })).value;
 const setArtMode = (tv, on) => artRequest(tv, 'set_artmode_status', { value: on ? 'on' : 'off' },
   { expect: ['art_mode_changed', 'artmode_status'] });
 
@@ -211,25 +211,45 @@ async function appState(tv, id) {
   }
 }
 
+// Poll REST app state until it's running (apps take a few seconds to come up)
+async function waitRunning(tv, id, ms) {
+  const end = Date.now() + ms;
+  let st = await appState(tv, id);
+  while (st === 'installed' && Date.now() < end) { await delay(500); st = await appState(tv, id); }
+  return st;
+}
+
+// Launch styles, in order: the websocket deep link, the websocket native launch, then the
+// older REST POST. Different apps/firmware accept different ones; REST state tells us
+// which worked. (Nov 6: HBO Max installed, DEEP_LINK alone didn't start it.)
+const LAUNCHERS = [
+  ['deep link', (tv, id) => remoteRequest(tv, 'ed.apps.launch', { appId: id, action_type: 'DEEP_LINK', metaTag: '' }, { timeoutMs: 3000 })],
+  ['native', (tv, id) => remoteRequest(tv, 'ed.apps.launch', { appId: id, action_type: 'NATIVE_LAUNCH', metaTag: '' }, { timeoutMs: 3000 })],
+  ['REST', (tv, id) => axios.post(`http://${tv.host}:${opt().httpPort}/api/v2/applications/${id}`, null, { timeout: 3000 })],
+];
+
 async function launchApp(tv, query) {
   let app = null;
   for (const q of String(query).split('|')) { app = await findApp(tv, q); if (app) break; }  // "HBO Max|Max"
   if (!app) throw new Error(`no app matching "${query}" on the TV`);
+  const waitMs = Number(process.env.FRAME_TV_APP_WAIT_MS) || 6000;
   let missing = 0;
+  const tried = [];
   for (const id of app.ids) {
     if ((await appState(tv, id)) === 'missing') { missing++; continue; }   // wrong id for this model
-    // Tizen: type 4 apps launch natively, the rest via deep link (what samsungtvws does too)
-    const data = { appId: id, action_type: app.type === 4 ? 'NATIVE_LAUNCH' : 'DEEP_LINK', metaTag: '' };
-    try { await remoteRequest(tv, 'ed.apps.launch', data, { timeoutMs: 3000 }); }
-    catch { /* many TVs launch without replying */ }
-    await delay(opt().settleMs);
-    const st = await appState(tv, id);
-    if (st === 'running') return app.name;
-    if (st === 'unknown') return `${app.name} (sent; TV doesn't confirm launches)`;
+    // App list told us the type: native apps (4) go native first, the rest deep link first
+    const order = app.type === 4 ? [LAUNCHERS[1], LAUNCHERS[0], LAUNCHERS[2]] : LAUNCHERS;
+    for (const [style, launch] of order) {
+      try { await launch(tv, id); } catch { /* many TVs launch without replying */ }
+      const st = await waitRunning(tv, id, waitMs);
+      if (st === 'running') return app.name;
+      if (st === 'unknown') return `${app.name} (sent; TV doesn't confirm launches)`;
+      tried.push(style);
+    }
   }
   throw new Error(missing === app.ids.length
     ? `${app.name} isn't installed on the TV (or its app id changed: set FRAME_TV_APP_IDS)`
-    : `${app.name} didn't start`);
+    : `${app.name} didn't start (tried ${tried.join(', ')})`);
 }
 
 // Art mode only when it needs changing: some firmware never answers a request for the
@@ -238,7 +258,16 @@ async function ensureArtMode(tv, on) {
   let current = null;
   try { current = await getArtMode(tv); } catch { /* status unsupported: just try */ }
   if (current === (on ? 'on' : 'off')) return on ? 'art mode (already)' : 'art already off';
-  await setArtMode(tv, on);
+  try {
+    await setArtMode(tv, on);
+  } catch (err) {
+    // No reply isn't failure: re-read the state and report what's actually true.
+    let now = null;
+    try { now = await getArtMode(tv); } catch { /* still nothing */ }
+    if (now === (on ? 'on' : 'off')) return on ? 'art mode' : 'art off';
+    if (!on && now == null && current == null) return 'art off sent (TV gave no art status)';
+    throw err;
+  }
   return on ? 'art mode' : 'art off';
 }
 
