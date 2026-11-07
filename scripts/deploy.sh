@@ -9,6 +9,13 @@ APP_DIR=/opt/sentinel
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Two Sentinels on one tailnet = every rule, Game Day and alert fires twice.
+if curl -fsS --max-time 2 localhost:3001/api/health >/dev/null 2>&1; then
+  echo "!!  Sentinel is still running on this Mac (port 3001). Stop 'npm run panel' first," >&2
+  echo "!!  or rules, Game Day and notifications will fire from both machines." >&2
+  if [ "${FORCE_DEPLOY:-}" != "1" ]; then echo "    (FORCE_DEPLOY=1 to deploy anyway)" >&2; exit 1; fi
+fi
+
 echo "==> Building frontend"
 npm run build
 
@@ -37,10 +44,14 @@ seed() {
     ssh "$HOST" "chmod 600 '$dest'"
   fi
 }
-echo "==> Secrets/logins (first deploy only)"
+echo "==> Secrets, logins and state (first deploy only)"
 seed backend/.env "$APP_DIR/backend/.env"
-seed backend/data/tokens.json "$APP_DIR/backend/data/tokens.json"
-seed backend/data/faces.json "$APP_DIR/backend/data/faces.json"
+# Logins (incl. Frame TV pairing), faces, rules you enabled + what fired today, scenes,
+# Game Day's already-triggered games, the activity log. Not heartbeat.json: the Pi
+# starts its own uptime record.
+for f in tokens faces rules scenes gameday activity; do
+  seed "backend/data/$f.json" "$APP_DIR/backend/data/$f.json"
+done
 
 echo "==> Installing prod deps on Pi + restarting"
 ssh -t "$HOST" "cd $APP_DIR/backend && npm ci --omit=dev --no-audit --no-fund && sudo systemctl restart sentinel"

@@ -59,20 +59,27 @@ The bootstrap installs Node 24, the systemd service (enabled, not started) and T
 ## 3. Join the tailnet
 
 ```bash
-ssh -t sentinel-pi 'sudo tailscale up'
+ssh -t sentinel-pi 'sudo tailscale up --operator=$USER'
 ```
 
-Open the login link it prints and approve with the same account.
+Open the login link it prints and approve with the same account. `--operator` lets
+Sentinel (which runs as your user, not root) use `tailscale ping` for presence.
 
 ## 4. First deploy
+
+**Stop Sentinel on the Mac first** (Ctrl+C on `npm run panel`). Two copies running
+means every rule, Game Day and notification fires twice; deploy refuses while the
+Mac's port 3001 answers.
 
 ```bash
 SENTINEL_HOST=sentinel-pi npm run deploy
 ```
 
-First run only, this also copies the Mac's `backend/.env`, logins
-(`backend/data/tokens.json`) and registered faces (`backend/data/faces.json`) to the Pi. After that, the Pi's copies are the
-source of truth and deploys never overwrite them. It ends with a health check.
+First run only, this also copies the Mac's `backend/.env` and `backend/data/`
+state to the Pi: logins (`tokens.json`, including the Frame TV pairing), registered
+faces, the rules you enabled and what already fired today, scenes, Game Day's
+triggered games, and the activity log. After that the Pi's copies are the source of
+truth and deploys never overwrite them. It ends with a health check.
 
 Anytime later, edit secrets on the Pi directly:
 `ssh sentinel-pi nano /opt/sentinel/backend/.env`, then
@@ -82,7 +89,7 @@ Anytime later, edit secrets on the Pi directly:
 
 Machine names are unique per tailnet, so free the name first:
 
-1. **Mac:** stop serving: `tailscale serve --https=443 off`, and stop `npm run panel`.
+1. **Mac:** stop serving: `tailscale serve --https=443 off` (`npm run panel` is already stopped).
 2. **Admin console** (login.tailscale.com → Machines): rename the Mac to
    something like `josh-mbp`, then rename the Pi to **`sentinel`**.
 3. **Pi:** `ssh sentinel-pi 'sudo tailscale serve --bg 3001'`
