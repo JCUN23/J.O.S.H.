@@ -39,13 +39,13 @@ const useBackendHealth = () => {
 
 // Which providers have a server-held login (shared by every device).
 const useAuthTokens = () => {
-    const [tokens, setTokens] = useState({ calendar: false, tesla: false });
+    const [tokens, setTokens] = useState({ calendar: false });
     useEffect(() => {
         let alive = true;
         const load = async () => {
             try {
                 const s = await getAuthStatus();
-                if (alive) setTokens({ calendar: s.google || s.microsoft, tesla: s.tesla });
+                if (alive) setTokens({ calendar: s.google || s.microsoft });
             } catch { /* backend down: the BACKEND item already shows it */ }
         };
         load();
@@ -83,7 +83,6 @@ const SystemStatus = ({ theme, isSpotifyConnected, isNewsConnected, isGoveeConne
         ['GOVEE', connected(isGoveeConnected)],
         ['HUE', connected(isHueConnected)],
         ['3D PRINTER', ['info', 'VIA CLOUD']],
-        ['TESLA', tokens.tesla ? ['ok', 'CONNECTED'] : ['info', 'PARKED']],
         ['ARDUINO', ['off', 'OFFLINE']],
         ['BLUETOOTH', ['off', 'OFFLINE']],
     ];

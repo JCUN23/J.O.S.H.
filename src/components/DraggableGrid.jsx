@@ -19,7 +19,7 @@ function innerScroller(el, stop) {
 const WIDGET_KEYS = [
     'weather', 'sports', 'calendar', 'quickcontrols',
     'spotify', 'news', 'smartthings', 'govee', 'bluetooth',
-    'crealityprinter', 'phillips_hue', 'arduino',   // 'arduino' slot holds the Tesla widget
+    'crealityprinter', 'phillips_hue',   // 'crealityprinter' slot holds the Bambu printer widget
     'scenes', 'activity', 'frametv'
 ];
 

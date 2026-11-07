@@ -45,7 +45,6 @@ app.use(require('./routes/spotify'));
 app.use(require('./routes/accounts'));
 app.use(require('./routes/faces'));
 app.use(require('./routes/hue'));
-app.use(require('./routes/tesla'));
 app.use(require('./routes/ai'));
 app.use(require('./routes/quotes'));
 app.use(require('./routes/news'));

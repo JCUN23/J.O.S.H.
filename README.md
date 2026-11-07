@@ -40,7 +40,6 @@ Tell Sentinel "I'm in a Tyler the Creator mood" and it will:
 
 ### Smart Home Control
 - **SmartThings** — Samsung Frame TV power, art mode, HDMI switching, volume
-- **Tesla** — Vehicle status and controls (in progress)
 
 ### Additional Widgets
 - **Weather** — Real-time conditions via Open-Meteo (free, no API key)
@@ -83,7 +82,6 @@ batcomputer-hub/
 │   │   ├── CalendarWidget.jsx   # Google + Microsoft events
 │   │   ├── NewsWidget.jsx       # AI-summarized headlines
 │   │   ├── SmartThingsWidget.jsx # TV + device controls
-│   │   ├── TeslaWidget.jsx      # Vehicle status
 │   │   └── ...
 │   ├── utils/                   # API wrappers + Sentinel logic
 │   └── App.jsx                  # Main orchestrator
@@ -165,7 +163,6 @@ Activate with **"Hey Sentinel"** or click the mic button.
 ## Roadmap
 
 - [ ] Game Day Mode — Auto-switch TV to live games via SmartThings
-- [ ] Tesla integration — Vehicle controls and status
 - [ ] ESP32 hardware controls — Physical buttons for Spotify via BLE
 - [ ] AI news briefings — Morning summary spoken by Sentinel
 - [ ] Multi-room audio sync

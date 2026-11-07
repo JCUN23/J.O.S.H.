@@ -12,11 +12,10 @@ const INTEGRATIONS = [
   { name: 'Sentinel AI (Groq)', all: ['GROQ_API_KEY'] },
   { name: 'Anthropic chat', all: ['ANTHROPIC_API_KEY'] },
   { name: 'ElevenLabs TTS', all: ['ELEVENLABS_API_KEY'] },
-  { name: 'Tesla', all: ['TESLA_CLIENT_ID', 'TESLA_CLIENT_SECRET'] },
 ];
 
 const has = (k) => typeof process.env[k] === 'string' && process.env[k].trim() !== '';
-// Values copied from .env.example and never filled in ("your_tesla_client_id") count as
+// Values copied from .env.example and never filled in ("your_govee_api_key") count as
 // missing: otherwise the check says ✅ and the provider fails later with a cryptic error.
 const isPlaceholder = (v) => /^\s*(your[_-]|<|changeme|xxx+|placeholder)/i.test(String(v || ''));
 const set = (k) => has(k) && !isPlaceholder(process.env[k]);
@@ -64,7 +63,6 @@ function validateEnv() {
     if (!Number.isInteger(p) || p < 1 || p > 65535) errors.push(`PORT must be an integer 1-65535: "${process.env.PORT}"`);
   }
   checkUrl('FRONTEND_URL', errors, { originOnly: true });
-  checkUrl('TESLA_REDIRECT_URI', errors);
 
   const status = INTEGRATIONS.map(({ name, all, any }) => {
     const groups = any || [all];

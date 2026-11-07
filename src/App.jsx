@@ -30,7 +30,6 @@ import DraggableGrid from './components/DraggableGrid';
 import BambuPrinterWidget from './components/BambuPrinterWidget';
 import SmartThingsWidget from './components/SmartThingsWidget';
 import PhilipsHueWidget from './components/PhillipsHueWidget';
-import TeslaWidget from './components/TeslaWidget';
 import { processCommand } from './utils/sentinelLocal';
 import { getGoogleCalendarEvents } from './utils/calendarApi';
 
@@ -109,7 +108,6 @@ const BatcomputerHub = () => {
       bluetooth: true,
       printer: true,
       hue: true,
-      tesla: true,
       scenes: true,
       activity: true,
       frametv: true,
@@ -164,34 +162,6 @@ const BatcomputerHub = () => {
           window.dispatchEvent(new Event('sentinel:smartthings-connected'));
         })
         .catch(err => console.error("SmartThings auth failed:", err));
-      return;
-    }
-
-    // Handle Tesla OAuth
-    if (state === 'tesla_auth') {
-      if (sessionStorage.getItem("tesla_code_exchanged")) {
-        window.history.replaceState({}, "", "/");
-        return;
-      }
-
-      sessionStorage.setItem("tesla_code_exchanged", "true");
-
-      fetch(`${BACKEND_URL}/auth/tesla/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-      })
-        .then(res => res.json())
-        .then(data => {
-          console.log("[Tesla] Token acquired and saved");
-          localStorage.setItem('tesla_access_token', data.access_token);
-          window.history.replaceState({}, "", "/");
-          sessionStorage.removeItem("tesla_code_exchanged");
-        })
-        .catch(err => {
-          console.error("Tesla auth failed:", err);
-          sessionStorage.removeItem("tesla_code_exchanged");
-        });
       return;
     }
 
@@ -1015,7 +985,6 @@ const BatcomputerHub = () => {
             {widgetVisibility.bluetooth && <BluetoothWidget theme={theme} />}
             {widgetVisibility.printer && <BambuPrinterWidget theme={theme} />}
             {widgetVisibility.hue && <PhilipsHueWidget theme={theme} setHueIsConnected={setHueIsConnected} />}
-            {widgetVisibility.tesla && <TeslaWidget theme={theme} />}
             {/* New widgets go at the END: DraggableGrid maps children to WIDGET_KEYS by position */}
             {widgetVisibility.scenes && <ScenesWidget theme={theme} />}
             {widgetVisibility.activity && <ActivityWidget theme={theme} />}

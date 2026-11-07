@@ -10,7 +10,7 @@ export async function getProviderToken(provider) {
     return res.json();
 }
 
-// -> { google, microsoft, spotify, smartthings, tesla } booleans
+// -> { google, microsoft, spotify, smartthings } booleans
 export async function getAuthStatus() {
     const res = await fetch(`${BACKEND_URL}/auth/status`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

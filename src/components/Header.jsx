@@ -59,7 +59,6 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
         bluetooth: 'Bluetooth',
         printer: '3D Printer',
         hue: 'Philips Hue',
-        tesla: 'Tesla',
         scenes: 'Scenes & Rules',
         activity: 'Activity',
         frametv: 'Frame TV'

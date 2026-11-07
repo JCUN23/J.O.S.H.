@@ -36,9 +36,9 @@ test('never echoes the secret value', () => {
   assert.ok(!out.includes('super-secret-value'));
 });
 
-test('example placeholders count as not set (regression: Tesla showed ✅ with your_tesla_client_id)', () => {
+test('example placeholders count as not set (regression: an integration showed ✅ with your_..._id)', () => {
   const { isPlaceholder, validateEnv } = require('../lib/env');
-  assert.ok(isPlaceholder('your_tesla_client_id'));
+  assert.ok(isPlaceholder('your_govee_api_key'));
   assert.ok(isPlaceholder('your-api-key'));
   assert.ok(isPlaceholder('<paste here>'));
   assert.equal(isPlaceholder('abc123real'), false);
@@ -48,12 +48,12 @@ test('example placeholders count as not set (regression: Tesla showed ✅ with y
   const orig = console.log;
   console.log = (m = '') => logs.push(String(m));
   try {
-    Object.assign(process.env, { TESLA_CLIENT_ID: 'your_tesla_client_id', TESLA_CLIENT_SECRET: 'your_tesla_client_secret' });
-    delete process.env.FRONTEND_URL; delete process.env.TESLA_REDIRECT_URI; delete process.env.PORT;
-    const tesla = validateEnv().find((s) => s.name === 'Tesla');
-    assert.equal(tesla.enabled, false);
-    assert.deepEqual(tesla.placeholders, ['TESLA_CLIENT_ID', 'TESLA_CLIENT_SECRET']);
-    assert.ok(logs.some((l) => /Tesla.*still the example placeholder/.test(l)));
-    assert.ok(!logs.join('\n').includes('your_tesla_client_id'), 'never prints the value');
+    Object.assign(process.env, { GOVEE_API_KEY: 'your_govee_api_key' });
+    delete process.env.FRONTEND_URL; delete process.env.PORT;
+    const govee = validateEnv().find((s) => s.name === 'Govee');
+    assert.equal(govee.enabled, false);
+    assert.deepEqual(govee.placeholders, ['GOVEE_API_KEY']);
+    assert.ok(logs.some((l) => /Govee.*still the example placeholder/.test(l)));
+    assert.ok(!logs.join('\n').includes('your_govee_api_key'), 'never prints the value');
   } finally { console.log = orig; process.env = saved; }
 });

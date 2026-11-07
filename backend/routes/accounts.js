@@ -3,7 +3,7 @@ const express = require('express');
 const store = require('../lib/tokenStore');
 
 const router = express.Router();
-const PROVIDERS = ['google', 'microsoft', 'spotify', 'smartthings', 'tesla'];
+const PROVIDERS = ['google', 'microsoft', 'spotify', 'smartthings'];
 
 router.get('/auth/status', (req, res) => {
   res.json(Object.fromEntries(PROVIDERS.map((p) => [p, store.isConnected(p)])));
