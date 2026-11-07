@@ -21,26 +21,78 @@ const HUE_LIGHTS = (process.env.HUE_GAMEDAY_LIGHTS || '5,4').split(',').map((s) 
 const alternate = (colors) => (i) => (i % 2 === 0 ? colors.primary : colors.secondary);
 const setGoveeColors = (colors) => devices.goveeApply({ colorFor: alternate(colors) });
 const setHueColors = (colors) => devices.hueApply({ lightIds: HUE_LIGHTS, colorFor: alternate(colors) });
-// TV: on, out of art mode, into the streaming app for this team (or the default), muted.
-//   GAMEDAY_TV_APP=YouTube TV            default app for every team (name as the TV lists it)
-//   GAMEDAY_TV_APP_PISTONS=FanDuel ...   per-team override (team key, upper-case, - -> _)
-//   GAMEDAY_TV_MUTE=false                leave the sound alone
-// No app configured: just the home screen, like before.
-function tvAppFor(team) {
-  const key = `GAMEDAY_TV_APP_${String(team?.key || '').toUpperCase().replace(/-/g, '_')}`;
-  return process.env[key] || process.env.GAMEDAY_TV_APP || null;
+// ---------- which streaming app ----------
+// ESPN lists each game's networks. A game on Peacock opens Peacock, ESPN+ opens the ESPN
+// app, TNT/truTV/TBS open HBO Max, anything else (FOX, CBS, BTN, ESPN, FanDuel Sports...)
+// opens Fubo. First matching entry wins; `*` is the fallback; `A|B` tries app names in turn.
+//   GAMEDAY_TV_NETWORK_APPS="ESPN+=ESPN,Peacock=Peacock,*=fubo"   replace the whole map
+//   GAMEDAY_TV_APP_BARCELONA=ESPN                                 per-team override (wins)
+//   GAMEDAY_TV_APP=fubo                                           used when the networks are unknown
+//   GAMEDAY_TV_MUTE=false                                         leave the sound alone
+const DEFAULT_NETWORK_APPS = 'ESPN+=ESPN,Peacock=Peacock,NBC=Peacock,TNT=HBO Max|Max,truTV=HBO Max|Max,TBS=HBO Max|Max,*=fubo';
+const norm = (x) => String(x).toLowerCase().replace(/\s+/g, '');
+
+// Network names from an ESPN event (schedule and scoreboard feeds shape these differently)
+function networksOf(event) {
+  const out = [];
+  for (const b of event?.competitions?.[0]?.broadcasts || []) {
+    for (const n of [b.media?.shortName, b.media?.name, b.name, ...(Array.isArray(b.names) ? b.names : [])]) {
+      if (n && !out.some((o) => norm(o) === norm(n))) out.push(n);
+    }
+  }
+  return out;
 }
-const wakeFrameTv = (team) => {
-  const app = tvAppFor(team);
-  return devices.tvApply({ power: true, artMode: false, app: app || undefined, home: !app,
+
+function networkMap() {
+  return (process.env.GAMEDAY_TV_NETWORK_APPS || DEFAULT_NETWORK_APPS).split(',').map((pair) => {
+    const i = pair.indexOf('=');
+    return i > 0 ? [pair.slice(0, i).trim(), pair.slice(i + 1).trim()] : null;
+  }).filter(Boolean);
+}
+
+// -> { app, why } (app null = no app, just the home screen)
+function pickTvApp(team, networks = []) {
+  const override = process.env[`GAMEDAY_TV_APP_${String(team?.key || '').toUpperCase().replace(/-/g, '_')}`];
+  if (override) return { app: override, why: `${team.name} always opens ${override}` };
+  if (networks.length) {
+    const map = networkMap();
+    for (const [net, app] of map) {
+      if (net !== '*' && networks.some((n) => norm(n) === norm(net))) return { app, why: `game is on ${networks.join(' / ')}` };
+    }
+    const fallback = map.find(([net]) => net === '*');
+    if (fallback) return { app: fallback[1], why: `game is on ${networks.join(' / ')}` };
+  }
+  if (process.env.GAMEDAY_TV_APP) return { app: process.env.GAMEDAY_TV_APP, why: 'default app (network unknown)' };
+  return { app: null, why: networks.length ? `game is on ${networks.join(' / ')}` : 'network unknown' };
+}
+
+// Manual Game Day: find the team's live game, or the next one within 12h, for its networks.
+async function currentEvent(team, fetchImpl = fetch) {
+  try {
+    const res = await fetchImpl(team.scheduleUrl, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const events = (await res.json())?.events || [];
+    const live = events.find((e) => e.competitions?.[0]?.status?.type?.state === 'in');
+    if (live) return live;
+    const soon = Date.now() + 12 * 3600_000;
+    return events.find((e) => e.competitions?.[0]?.status?.type?.state === 'pre' && Date.parse(e.date) < soon) || null;
+  } catch { return null; }
+}
+
+const wakeFrameTv = async (team, event) => {
+  const { app, why } = pickTvApp(team, networksOf(event));
+  const r = await devices.tvApply({ power: true, artMode: false, app: app || undefined, home: !app,
     mute: process.env.GAMEDAY_TV_MUTE === 'false' ? undefined : true });
+  return `${r} (${why})`;
 };
 
 // Lights (+ TV unless lightsOnly). Each step reports its own result; one failing
 // integration never blocks the others.
-async function activate(team, { lightsOnly = false, reason = 'manual' } = {}) {
+async function activate(team, { lightsOnly = false, reason = 'manual', event = null } = {}) {
+  // Manual runs look the game up so the TV opens the right app (only matters for Frame TVs)
+  if (!lightsOnly && !event && require('./frameTv').configured().length) event = await currentEvent(team);
   const steps = [setGoveeColors(team.colors), setHueColors(team.colors)];
-  if (!lightsOnly) steps.push(wakeFrameTv(team));
+  if (!lightsOnly) steps.push(wakeFrameTv(team, event));
   const results = (await Promise.allSettled(steps)).map((r) =>
     r.status === 'fulfilled' ? r.value : `error: ${r.reason?.response?.data?.message || r.reason?.message}`);
   const entry = { team: team.name, at: new Date().toISOString(), reason, lightsOnly, results };
@@ -74,7 +126,7 @@ async function checkOnce(fetchImpl = fetch, act = activate) {
       seen[event.id] = { team: team.key, at: new Date().toISOString() };
       state.set('triggered', pruneOld(seen));   // remember BEFORE acting: never double-fire
       fired.push(team.name);
-      await act(team, { reason: 'auto: game is live' });
+      await act(team, { reason: 'auto: game is live', event });
     } catch (err) {
       console.warn(`Game Day watcher: ${team.name} check failed (${err.message})`);
     }
@@ -100,4 +152,4 @@ function startWatcher({ intervalMs = Number(process.env.GAMEDAY_INTERVAL_MS) || 
 
 const status = () => ({ auto: Boolean(timer), last: state.get('last'), teams: TEAMS.map((t) => t.name) });
 
-module.exports = { activate, checkOnce, startWatcher, status, liveEvent, _state: state };
+module.exports = { activate, checkOnce, startWatcher, status, liveEvent, networksOf, pickTvApp, _state: state };

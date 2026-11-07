@@ -157,7 +157,8 @@ async function findApp(tv, query) {
 }
 
 async function launchApp(tv, query) {
-  const app = await findApp(tv, query);
+  let app = null;
+  for (const q of String(query).split('|')) { app = await findApp(tv, q); if (app) break; }  // "HBO Max|Max"
   if (!app) throw new Error(`no app matching "${query}" on the TV`);
   // Tizen: type 4 apps launch natively, the rest via deep link (what samsungtvws does too)
   const data = { appId: app.id, action_type: app.type === 4 ? 'NATIVE_LAUNCH' : 'DEEP_LINK', metaTag: '' };
@@ -266,7 +267,8 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
   }
   if (app) {
     if (artMode === false) await delay(opt().settleMs);     // let it leave art mode first
-    did.push(`opened ${await launchApp(tv, app)}`);
+    try { did.push(`opened ${await launchApp(tv, app)}`); }
+    catch (err) { did.push(`app error: ${err.message}`); await sendKey(tv, 'KEY_HOME'); did.push('home screen'); }
   } else if (home) { await delay(opt().settleMs); await sendKey(tv, 'KEY_HOME'); did.push('home screen'); }
   if (mute !== undefined) did.push(await setMute(tv, mute));
   return did;

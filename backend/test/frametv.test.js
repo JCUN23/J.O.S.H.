@@ -145,6 +145,13 @@ test('game day: on, art off, app, muted; a TV that stops answering status checks
   assert.deepEqual(tv.launched, ['PvWgqxV3Xa.YouTubeTV:DEEP_LINK']);
 });
 
+test('app not on the TV: red error in the result, home screen instead', async () => {
+  tv.power = 'on'; tv.keys = [];
+  const r = await frame.apply({ power: true, artMode: false, app: 'HBO Max|Max', mute: true });
+  assert.match(r, /app error: no app matching "HBO Max\|Max" on the TV, home screen, muted/);
+  assert.ok(tv.keys.includes('Click:KEY_HOME'));
+});
+
 test('mute falls back to the remote key and says it only toggles', async () => {
   tv.upnp = false; tv.muted = false;
   assert.match(await frame.setMute(frame.find('office'), true), /toggled/);

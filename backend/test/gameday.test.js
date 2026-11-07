@@ -106,3 +106,43 @@ test('HTTP: manual trigger + status', async (t) => {
   assert.equal(s.body.last.team, 'Detroit Lions');
   assert.equal(s.body.teams.length, TEAMS.length);
 });
+
+test('networksOf reads both ESPN feed shapes, deduped', () => {
+  const ev = (broadcasts) => ({ competitions: [{ broadcasts }] });
+  assert.deepEqual(gameDay.networksOf(ev([{ media: { shortName: 'TNT' } }, { media: { shortName: 'truTV' } }])), ['TNT', 'truTV']);
+  assert.deepEqual(gameDay.networksOf(ev([{ market: 'national', names: ['NBC', 'Peacock'] }, { names: ['Peacock'] }])), ['NBC', 'Peacock']);
+  assert.deepEqual(gameDay.networksOf(null), []);
+});
+
+test('pickTvApp: per-team override, then network map, then default', () => {
+  const lions = findTeam('lions');
+  const barca = findTeam('barcelona');
+  assert.equal(gameDay.pickTvApp(lions, ['FOX']).app, 'fubo');
+  assert.equal(gameDay.pickTvApp(lions, ['NBC', 'Peacock']).app, 'Peacock');
+  assert.equal(gameDay.pickTvApp(findTeam('michigan basketball'), ['TNT', 'truTV']).app, 'HBO Max|Max');
+  assert.equal(gameDay.pickTvApp(barca, ['ESPN+']).app, 'ESPN');
+  assert.match(gameDay.pickTvApp(lions, ['FOX']).why, /game is on FOX/);
+  process.env.GAMEDAY_TV_APP_BARCELONA = 'ESPN';
+  assert.equal(gameDay.pickTvApp(barca, ['CBS Sports Network']).app, 'ESPN', 'override wins');
+  delete process.env.GAMEDAY_TV_APP_BARCELONA;
+  assert.equal(gameDay.pickTvApp(lions, []).app, null, 'unknown network, no default: home screen');
+  process.env.GAMEDAY_TV_APP = 'fubo';
+  assert.equal(gameDay.pickTvApp(lions, []).app, 'fubo');
+  delete process.env.GAMEDAY_TV_APP;
+  process.env.GAMEDAY_TV_NETWORK_APPS = 'FOX=YouTube TV,*=Sling';
+  assert.equal(gameDay.pickTvApp(lions, ['FOX']).app, 'YouTube TV');
+  assert.equal(gameDay.pickTvApp(lions, ['CBS']).app, 'Sling');
+  delete process.env.GAMEDAY_TV_NETWORK_APPS;
+});
+
+test('watcher hands the live event (with its networks) to activate', async () => {
+  const restore = quiet();
+  try {
+    gameDay._state.set('triggered', {});
+    const live = { events: [{ id: 'P9', competitions: [{ status: { type: { state: 'in' } }, broadcasts: [{ names: ['Peacock'] }] }] }] };
+    const got = [];
+    const fetchImpl = async (url) => ok(url.includes('/nba/') ? live : { events: [] });
+    await gameDay.checkOnce(fetchImpl, async (team, opts) => got.push([team.key, gameDay.networksOf(opts.event)]));
+    assert.deepEqual(got, [['pistons', ['Peacock']]]);
+  } finally { restore(); }
+});
