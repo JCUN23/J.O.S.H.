@@ -49,7 +49,7 @@ Host sentinel-pi
 From the Mac, in `batcomputer-hub`:
 
 ```bash
-ssh sentinel-pi 'sudo mkdir -p /opt/sentinel && sudo chown $USER:$USER /opt/sentinel'
+ssh -t sentinel-pi 'sudo mkdir -p /opt/sentinel && sudo chown $USER:$USER /opt/sentinel'   # -t: sudo asks for your Pi password
 rsync -az deploy scripts sentinel-pi:/opt/sentinel/
 ssh -t sentinel-pi 'bash /opt/sentinel/scripts/pi-bootstrap.sh'
 ```
