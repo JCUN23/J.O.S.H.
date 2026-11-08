@@ -45,33 +45,47 @@ const find = (id) => configured().find((t) => t.id === id) || null;
 const key = (tv) => `frametv:${tv.id}`;
 const saved = (tv) => tokens.get(key(tv)) || {};
 const remember = (tv, patch) => tokens.set(key(tv), { ...saved(tv), ...patch });
-const isPaired = (tv) => Boolean(saved(tv).token);
+// A TV that showed its Allow prompt without an answer (or refused us) needs approval.
+// While it does, background work (status polling, rules, Game Day) must NOT connect:
+// every connection pops another prompt on the TV. Only the explicit Pair button does.
+// (Nov 8: after moving Sentinel to the Pi, the TV prompted on every 30s status poll.)
+const needsApproval = {};   // tv.id -> since (ms)
+const isPaired = (tv) => Boolean(saved(tv).token) && !needsApproval[tv.id];
+const approvalError = () => Object.assign(new Error('TV needs approval: press Pair in the Frame TV widget, then Allow on the TV'), { code: 'needs_approval' });
 
 // Open a channel and resolve once the TV says it's ready. Without a token the TV shows
 // its Allow prompt and holds the connection until you answer, hence the long pair timeout.
-function open(tv, channel, { timeoutMs = 8000 } = {}) {
+function open(tv, channel, { timeoutMs = Number(process.env.FRAME_TV_CONNECT_MS) || 8000, pairing = false } = {}) {
+  if (needsApproval[tv.id] && !pairing) return Promise.reject(approvalError());
   const { scheme, wsPort } = opt();
   const token = saved(tv).token;
   const url = `${scheme}://${tv.host}:${wsPort}/api/v2/channels/${channel}?name=${APP_NAME}${token ? `&token=${token}` : ''}`;
   return new Promise((resolve, reject) => {
     let settled = false;
     const ws = new WebSocket(url, { rejectUnauthorized: false, handshakeTimeout: 5000 }); // TV cert is self-signed
+    let connected = false;                       // did the TV accept us (vs. sit on its prompt)?
     const done = (err) => {
       if (settled) return;
       settled = true; clearTimeout(timer); clearTimeout(readyFallback);
-      if (err) { ws.terminate(); reject(err); } else resolve(ws);
+      if (err) { ws.terminate(); reject(err); } else { delete needsApproval[tv.id]; resolve(ws); }
     };
     let readyFallback = null;
-    const timer = setTimeout(() => done(new Error(token ? 'TV did not answer'
-      : 'not paired yet: press Pair, then choose Allow on the TV')), timeoutMs);
+    const timer = setTimeout(() => {
+      // Socket open but no accept: the TV is showing its Allow prompt. Stop asking until Pair.
+      if (!connected && ws.readyState === WebSocket.OPEN) { needsApproval[tv.id] = Date.now(); return done(approvalError()); }
+      done(new Error(token ? 'TV did not answer' : 'not paired yet: press Pair, then choose Allow on the TV'));
+    }, timeoutMs);
     ws.on('message', (raw) => {
       let msg; try { msg = JSON.parse(raw); } catch { return; }
       if (msg.event === 'ms.channel.connect') {
+        connected = true;
         if (msg.data?.token && msg.data.token !== token) remember(tv, { token: msg.data.token, pairedAt: Date.now() });
         if (channel !== ART) done();
         else readyFallback = setTimeout(() => done(), 1500);   // some firmware never sends "ready"
       } else if (msg.event === 'ms.channel.ready') done();
       else if (msg.event === 'ms.channel.unauthorized') {
+        needsApproval[tv.id] = Date.now();
+        remember(tv, { token: null });             // a refused token is no good anymore
         done(new Error('TV refused Sentinel. Allow it under Settings > General > External Device Manager > Device Connection Manager'));
       }
     });
@@ -80,7 +94,7 @@ function open(tv, channel, { timeoutMs = 8000 } = {}) {
   });
 }
 
-const pair = (tv) => open(tv, REMOTE, { timeoutMs: 45000 }).then((ws) => { ws.close(); return isPaired(tv); });
+const pair = (tv) => open(tv, REMOTE, { timeoutMs: 45000, pairing: true }).then((ws) => { ws.close(); return isPaired(tv); });
 
 // Remote keypresses. hold: ms to keep the key down (a long POWER fully turns a Frame off;
 // a short one just flips between TV and art mode).
@@ -327,11 +341,12 @@ async function waitFor(tv, test, ms) {
 
 async function status(tv) {
   const i = await info(tv);
-  const base = { id: tv.id, name: tv.name, host: tv.host, paired: isPaired(tv) };
+  const base = { id: tv.id, name: tv.name, host: tv.host, paired: isPaired(tv), needsApproval: Boolean(needsApproval[tv.id]) };
   if (!i) return { ...base, reachable: false, power: 'off', artMode: null, model: null };
   let artMode = null;
-  if (i.power === 'on' && base.paired) { try { artMode = await getArtMode(tv); } catch { /* older firmware */ } }
-  return { ...base, reachable: true, power: i.power, artMode, model: i.model };
+  if (i.power === 'on' && base.paired) { try { artMode = await getArtMode(tv); } catch { /* older firmware, or now needs approval */ } }
+  // Re-read: the art check above is what discovers a TV that wants approval again
+  return { ...base, paired: isPaired(tv), needsApproval: Boolean(needsApproval[tv.id]), reachable: true, power: i.power, artMode, model: i.model };
 }
 
 async function powerOn(tv) {
@@ -393,4 +408,6 @@ async function apply(opts) {
 const KEYS = ['KEY_VOLUP', 'KEY_VOLDOWN', 'KEY_MUTE', 'KEY_HOME', 'KEY_RETURN', 'KEY_SOURCE', 'KEY_HDMI',
   'KEY_PLAY', 'KEY_PAUSE', 'KEY_UP', 'KEY_DOWN', 'KEY_LEFT', 'KEY_RIGHT', 'KEY_ENTER'];
 
-module.exports = { configured, find, status, pair, sendKey, getArtMode, setArtMode, ensureArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KNOWN_APPS, KEYS };
+const _resetApproval = () => { for (const k of Object.keys(needsApproval)) delete needsApproval[k]; };
+
+module.exports = { _resetApproval, configured, find, status, pair, sendKey, getArtMode, setArtMode, ensureArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KNOWN_APPS, KEYS };

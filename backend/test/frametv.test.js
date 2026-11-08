@@ -11,7 +11,7 @@ const dir = tempStores();
 process.env.ACTIVITY_STORE_PATH = path.join(dir, 'activity.json');
 
 // ---- fake TV ----
-const tv = { launchNeeds: null, artGetWorks: true, appListWorks: true, installed: new Set(['3201907018807', 'PvWgqxV3Xa.YouTubeTV', '111299001912', 'org.tizen.browser', '3201601007230']), running: new Set(), wolWorks: true, infoBudget: Infinity, launched: [], muted: false, upnp: true, power: 'standby', art: 'off', keys: [], allow: true, wol: 0, token: 'tok-123' };
+const tv = { prompting: false, connections: 0, launchNeeds: null, artGetWorks: true, appListWorks: true, installed: new Set(['3201907018807', 'PvWgqxV3Xa.YouTubeTV', '111299001912', 'org.tizen.browser', '3201601007230']), running: new Set(), wolWorks: true, infoBudget: Infinity, launched: [], muted: false, upnp: true, power: 'standby', art: 'off', keys: [], allow: true, wol: 0, token: 'tok-123' };
 const httpSrv = http.createServer((req, res) => {
   if (req.url === '/upnp/control/RenderingControl1') {
     let body = ''; req.on('data', (c) => { body += c; });
@@ -39,6 +39,8 @@ wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x');
   const art = url.pathname.endsWith('com.samsung.art-app');
   const hasToken = url.searchParams.get('token') === tv.token;
+  tv.connections++;
+  if (!hasToken && tv.prompting) return;             // Allow prompt on screen, waiting for the remote
   if (!hasToken && !tv.allow) { ws.send(JSON.stringify({ event: 'ms.channel.unauthorized' })); return; }
   ws.send(JSON.stringify({ event: 'ms.channel.connect', data: hasToken ? {} : { token: tv.token } }));
   if (art) ws.send(JSON.stringify({ event: 'ms.channel.ready' }));
@@ -91,7 +93,7 @@ test.before(async () => {
   Object.assign(process.env, {
     FRAME_TVS: 'Office@127.0.0.1', FRAME_TV_WS_SCHEME: 'ws', FRAME_TV_WS_PORT: String(port),
     FRAME_TV_HTTP_PORT: String(port), FRAME_TV_WOL_ADDR: '127.0.0.1', FRAME_TV_WOL_PORT: String(udp.address().port),
-    FRAME_TV_BOOT_MS: '3000', FRAME_TV_DMR_PORT: String(port), FRAME_TV_SETTLE_MS: '0', FRAME_TV_APP_WAIT_MS: '600',
+    FRAME_TV_BOOT_MS: '3000', FRAME_TV_DMR_PORT: String(port), FRAME_TV_SETTLE_MS: '0', FRAME_TV_APP_WAIT_MS: '600', FRAME_TV_CONNECT_MS: '700',
   });
   frame = require('../lib/frameTv');
 });
@@ -206,6 +208,22 @@ test('mute falls back to the remote key and says it only toggles', async () => {
   assert.match(await frame.setMute(frame.find('office'), true), /toggled/);
   assert.equal(tv.muted, true);
   tv.upnp = true;
+});
+
+test('a TV showing its Allow prompt is asked once, not on every status poll (Nov 8 Pi move)', async () => {
+  const office = frame.find('office');
+  tv.power = 'on'; tv.token = 'new-token-from-this-pi'; tv.prompting = true; tv.connections = 0;  // saved token no longer valid
+  const first = await frame.status(office);           // art status check connects -> prompt -> no answer
+  assert.equal(first.paired, false);
+  assert.equal(first.needsApproval, true);
+  const after = tv.connections;
+  await frame.status(office);
+  await frame.status(office);
+  assert.match(await frame.apply({ artMode: true }), /needs approval: press Pair/);
+  assert.equal(tv.connections, after, 'no further connections until Pair');
+  tv.prompting = false; tv.allow = true;              // user presses Pair and Allow
+  assert.equal(await frame.pair(office), true);
+  assert.equal((await frame.status(office)).paired, true);
 });
 
 test('unreachable TV reports a readable error, not a crash', async () => {
