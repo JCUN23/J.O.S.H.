@@ -68,7 +68,7 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
     <div className={`hud-header mb-6 flex items-center justify-between border-b ${border} pb-4`}>
         <div className="flex items-center gap-4">
             <div className="hud-wordmark">J.O.S.H.</div>
-            <div className={`text-sm ${text_700}`}>Joint Operations & Systems Hub v1.0</div>
+            <div className={`text-sm ${text_700}`}>Joint Operations & Systems Hub v1.1</div>
         </div>
         <div className="text-right flex items-center relative">
             {/* Widget Visibility Dropdown */}
