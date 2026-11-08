@@ -41,6 +41,9 @@ router.post('/api/sentinel/chat', async (req, res) => {
     if (!message) {
       return res.status(400).json({ error: 'No message provided' });
     }
+    // What actually reached Sentinel (journalctl -u sentinel): the first thing to check
+    // when an answer doesn't match what you said.
+    console.log(`[Sentinel] heard: "${String(message).slice(0, 200)}"`);
 
     if (!GROQ_API_KEY) {
       return res.status(500).json({ error: 'Groq API key not configured', needsKey: true });

@@ -11,6 +11,7 @@ import ScenesWidget from './components/ScenesWidget';
 import ActivityWidget from './components/ActivityWidget';
 import FrameTvWidget from './components/FrameTvWidget';
 import IdleMode from './components/IdleMode';
+import { createUtterance } from './utils/utterance';
 import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT } from './utils/idlePrefs';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
@@ -227,6 +228,13 @@ const BatcomputerHub = () => {
   const commandTimeoutRef = useRef(null); // Timeout for command after wake word
   const wakeWordEnabledRef = useRef(wakeWordEnabled); // Ref to track wake word setting
   const processingRef = useRef(false); // Track if currently processing a command
+  // One spoken command = segments until a beat of silence (see utils/utterance.js)
+  const utteranceRef = useRef(null);
+  const finishUtteranceRef = useRef(() => {});
+  const utterance = useCallback(() => {
+    utteranceRef.current ||= createUtterance({ onDone: (text) => finishUtteranceRef.current(text) });
+    return utteranceRef.current;
+  }, []);
 
   // ElevenLabs TTS with browser fallback - returns promise that resolves when done speaking
   const speak = useCallback(async (text) => {
@@ -346,6 +354,7 @@ const BatcomputerHub = () => {
     }
 
     console.log('[Sentinel] Processing command:', command);
+    utteranceRef.current?.cancel();
 
     setProcessing(true);
     processingRef.current = true;
@@ -442,6 +451,22 @@ const BatcomputerHub = () => {
     }
   }, [speak]);
 
+  // A spoken command is complete (utils/utterance.js): send it. Manual mode stops the mic.
+  const finishUtterance = useCallback((text) => {
+    if (processingRef.current) return;
+    if (!wakeWordEnabledRef.current) {
+      if (!isListeningRef.current) return;
+      isListeningRef.current = false;
+      setListening(false);
+      try { recognitionRef.current?.stop(); } catch { /* already stopped */ }
+    } else if (!awaitingCommandRef.current) {
+      return;
+    }
+    console.log('[Sentinel] Command complete:', text);
+    processVoiceCommand(text);
+  }, [processVoiceCommand]);
+  useEffect(() => { finishUtteranceRef.current = finishUtterance; }, [finishUtterance]);
+
   // Extract command after wake word
   const extractCommand = useCallback((text) => {
     const lower = text.toLowerCase();
@@ -527,9 +552,9 @@ const BatcomputerHub = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const instance = new SpeechRecognition();
 
-    // For wake word mode: continuous listening
-    // For manual mode: single utterance
-    instance.continuous = forWakeWord;
+    // Continuous in both modes: a short pause must not end the command (utterance.js
+    // decides when you're done). Manual mode stops itself once the command is sent.
+    instance.continuous = true;
     instance.interimResults = true;
     instance.maxAlternatives = 1;
 
@@ -562,37 +587,26 @@ const BatcomputerHub = () => {
         if (command === false) {
           // No wake word - but if we're awaiting a command, this IS the command
           if (awaitingCommandRef.current) {
-            setTranscript(fullTranscript);
-
-            // Clear any existing timeout
+            // Any speech keeps the command window open; 6s of quiet returns to passive
             clearTimeout(commandTimeoutRef.current);
-
-            // Only set new timeout on interim results, not final
-            // This prevents the timeout from racing with the final processing
-            if (!isFinal) {
-              console.log('[Sentinel] Resetting timeout (heard interim speech)');
-              commandTimeoutRef.current = setTimeout(() => {
-                if (awaitingCommandRef.current && !processingRef.current) {
-                  console.log('[Sentinel] Command timeout (no more speech), returning to passive listening');
-                  setAwaitingCommand(false);
-                  awaitingCommandRef.current = false;
-                  setTranscript('');
-                  setResponse('');
-                }
-              }, 6000);
-            }
+            commandTimeoutRef.current = setTimeout(() => {
+              if (awaitingCommandRef.current && !processingRef.current) {
+                console.log('[Sentinel] Command timeout (no more speech), returning to passive listening');
+                utteranceRef.current?.cancel();
+                setAwaitingCommand(false);
+                awaitingCommandRef.current = false;
+                setTranscript('');
+                setResponse('');
+              }
+            }, 6000);
 
             if (isFinal && isWakeEcho(fullTranscript, wakeTranscriptRef.current, wakeAtRef.current)) {
               console.log('[Sentinel] Ignoring wake-word echo:', fullTranscript);
               return;
             }
 
-            if (isFinal && fullTranscript.trim()) {
-              console.log('[Sentinel] Processing awaited command:', fullTranscript);
-              // Clear timeout since we're processing now
-              clearTimeout(commandTimeoutRef.current);
-              processVoiceCommand(fullTranscript);
-            }
+            // Collect: sent once you stop talking, not at the first pause
+            setTranscript(utterance().push(isFinal ? { final: fullTranscript } : { partial: fullTranscript }));
           } else {
             // Not awaiting - ignore non-wake-word speech
             console.log('[Sentinel] Ignoring (no wake word, not awaiting)');
@@ -625,22 +639,19 @@ const BatcomputerHub = () => {
           return;
         }
 
-        // We have a command (after wake word in same utterance)
-        setTranscript(command);
-
-        if (isFinal && command.trim()) {
-          console.log('[Sentinel] Processing command:', command);
-          processVoiceCommand(command);
+        // Wake word + start of a command in one breath: keep collecting the rest
+        if (!awaitingCommandRef.current) {
+          wakeAtRef.current = Date.now();
+          wakeTranscriptRef.current = '';
+          setAwaitingCommand(true);
+          awaitingCommandRef.current = true;
         }
+        clearTimeout(commandTimeoutRef.current);
+        setTranscript(utterance().push(isFinal ? { final: command } : { partial: command }));
       } else if (!forWakeWord) {
-        // Manual mode (button press)
+        // Manual mode (button press): collect until a beat of silence
         if (!isListeningRef.current) return;
-
-        setTranscript(fullTranscript);
-
-        if (isFinal && isListeningRef.current && fullTranscript.trim()) {
-          processVoiceCommand(fullTranscript);
-        }
+        setTranscript(utterance().push(isFinal ? { final: fullTranscript } : { partial: fullTranscript }));
       }
     };
 
@@ -716,7 +727,7 @@ const BatcomputerHub = () => {
     };
 
     return instance;
-  }, [extractCommand, playWakeSound, processVoiceCommand]);
+  }, [extractCommand, playWakeSound, utterance]);
 
   // Start wake word listening
   const startWakeWordListening = useCallback(() => {
@@ -749,6 +760,7 @@ const BatcomputerHub = () => {
         recognitionRef.current.abort();
       } catch { /* ignore */ }
     }
+    utteranceRef.current?.cancel();
     setWakeWordActive(false);
     setAwaitingCommand(false);
     awaitingCommandRef.current = false;
@@ -842,7 +854,8 @@ const BatcomputerHub = () => {
 
     // Manual mode (wake word disabled)
     if (listening) {
-      // Stop listening
+      // Stop listening (and drop anything half-said)
+      utteranceRef.current?.cancel();
       isListeningRef.current = false;
       clearTimeout(silenceTimerRef.current);
       if (recognitionRef.current) {
