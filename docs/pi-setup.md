@@ -72,7 +72,7 @@ means every rule, Game Day and notification fires twice; deploy refuses while th
 Mac's port 3001 answers.
 
 ```bash
-SENTINEL_HOST=sentinel-pi npm run deploy
+npm run deploy
 ```
 
 First run only, this also copies the Mac's `backend/.env` and `backend/data/`
@@ -101,7 +101,7 @@ The tablet just keeps working: same URL, same certificate name, same OAuth redir
 
 | Task | Command |
 |---|---|
-| Ship changes | `SENTINEL_HOST=sentinel-pi npm run deploy` |
+| Ship changes | `npm run deploy` |
 | Live logs | `ssh sentinel-pi journalctl -u sentinel -f` |
 | Restart | `ssh sentinel-pi sudo systemctl restart sentinel` |
 | Status | `ssh sentinel-pi systemctl status sentinel` |

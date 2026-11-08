@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Build on the Mac, ship to the Pi, install prod deps there, restart, health-check.
-# Usage:  npm run deploy            (defaults below)
-#         SENTINEL_HOST=pi@sentinel-pi.local npm run deploy
+# Usage:  npm run deploy            (uses the `sentinel-pi` alias from ~/.ssh/config)
+#         SENTINEL_HOST=jcun@10.0.0.77 npm run deploy
 set -euo pipefail
 
-HOST="${SENTINEL_HOST:-sentinel-pi.local}"   # anything ssh accepts: user@host, an ~/.ssh/config alias
+# Default: the ~/.ssh/config alias from docs/pi-setup.md (it carries the Pi username).
+# A bare hostname would log in with the Mac's username instead.
+HOST="${SENTINEL_HOST:-sentinel-pi}"
 APP_DIR=/opt/sentinel
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
