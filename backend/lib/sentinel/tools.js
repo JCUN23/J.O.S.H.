@@ -108,11 +108,11 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "get_sports",
-      description: "Get current sports information, scores, schedules, or game updates for any team or league",
+      description: "Real sports data from ESPN: today's games, start times, TV network, live scores and finals. Josh follows the Detroit Lions, Michigan Football, Michigan Basketball, Detroit Pistons and FC Barcelona. Ask with no team for today's games across his teams, name a team for its game/next game/last result, or name a league (NFL, NBA, college football, La Liga...) for that league's games today.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "The sports question or request (e.g., 'NFL games today', 'Pistons score', 'next Lions game')" }
+          query: { type: "string", description: "The question in plain words, e.g. 'games today', 'Lions score', 'when do the Pistons play', 'NBA games tonight'" }
         },
         required: ["query"]
       }

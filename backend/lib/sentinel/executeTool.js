@@ -129,57 +129,8 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
 
   // ===== SPORTS =====
   if (toolName === 'get_sports') {
-    try {
-      const query = (args.query || '').toLowerCase();
-      let sport = '', team = '', teamLabel = '';
-      if (query.includes('nfl') || query.includes('football') || query.includes('lions')) sport = 'football/nfl';
-      else if (query.includes('nba') || query.includes('basketball') || query.includes('pistons')) sport = 'basketball/nba';
-      else if (query.includes('barcelona') || query.includes('barca') || query.includes('la liga') || query.includes('soccer')) sport = 'soccer/esp.1';
-      if (query.includes('lions')) { team = 'det'; teamLabel = 'Lions'; }
-      else if (query.includes('pistons')) { team = 'det'; teamLabel = 'Pistons'; }
-      else if (query.includes('barcelona') || query.includes('barca')) { team = '83'; teamLabel = 'FC Barcelona'; }
-
-      if (!sport) return 'I can provide info for NFL (Lions), NBA (Pistons), and La Liga (FC Barcelona) games.';
-
-      if (query.includes('score')) {
-        const espnRes = await axios.get(`https://site.api.espn.com/apis/site/v2/sports/${sport}/scoreboard`);
-        const events = espnRes.data.events || [];
-        if (events.length === 0) return 'No recent games found.';
-        const targetEvent = team ? events.find(e => e.competitions[0].competitors.some(c => c.team.abbreviation.toLowerCase() === team)) : null;
-        if (targetEvent) {
-          const comp = targetEvent.competitions[0];
-          const home = comp.competitors.find(c => c.homeAway === 'home');
-          const away = comp.competitors.find(c => c.homeAway === 'away');
-          return `${away.team.shortDisplayName} ${away.score}, ${home.team.shortDisplayName} ${home.score} (${targetEvent.status.type.description})`;
-        }
-        return events.slice(0, 3).map(e => {
-          const comp = e.competitions[0];
-          const home = comp.competitors.find(c => c.homeAway === 'home');
-          const away = comp.competitors.find(c => c.homeAway === 'away');
-          return `${away.team.shortDisplayName} ${away.score}, ${home.team.shortDisplayName} ${home.score}`;
-        }).join('; ');
-      }
-
-      if (team) {
-        const espnRes = await axios.get(`https://site.api.espn.com/apis/site/v2/sports/${sport}/teams/${team}`);
-        if (espnRes.data.team?.nextEvent?.[0]) {
-          const nextEvent = espnRes.data.team.nextEvent[0];
-          const gameDate = new Date(nextEvent.date);
-          return `${teamLabel} next game: ${nextEvent.shortName} on ${gameDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`;
-        }
-        return 'No upcoming games found.';
-      }
-
-      const espnRes = await axios.get(`https://site.api.espn.com/apis/site/v2/sports/${sport}/scoreboard`);
-      const events = espnRes.data.events || [];
-      if (events.length === 0) return 'No games today.';
-      return events.slice(0, 3).map(e => {
-        const comp = e.competitions[0];
-        const home = comp.competitors.find(c => c.homeAway === 'home');
-        const away = comp.competitors.find(c => c.homeAway === 'away');
-        return `${away.team.shortDisplayName} at ${home.team.shortDisplayName} (${e.status.type.description})`;
-      }).join(', ');
-    } catch { return 'Unable to get sports information.'; }
+    // Followed teams + date-filtered league scoreboards with real times (lib/sports.js)
+    return require('../sports').answer(args.query);
   }
 
   // ===== PLAY MUSIC (Spotify + lights) =====
