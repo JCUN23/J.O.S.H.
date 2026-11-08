@@ -1,8 +1,14 @@
 import { useEffect, useState, useRef } from 'react';
 import { Camera, UserPlus, Trash2, Loader2, X } from 'lucide-react';
 import { saveFaces, syncFaces } from '../../utils/faceStore';
+import { loadFaceApi, FACE_MODEL_URL } from '../../utils/faceApiLoader';
 
-const FaceManagement = ({ onClose }) => {
+// onRegistered(face): called a moment after a face is saved (so the success message is
+// seen). Registering means the person is standing right here, so callers use it to close
+// the dialog and, during first-time setup, to finish setup already signed in.
+const REGISTERED_PAUSE_MS = 1200;
+
+const FaceManagement = ({ onClose, onRegistered }) => {
     const [registeredFaces, setRegisteredFaces] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCapturing, setIsCapturing] = useState(false);
@@ -19,19 +25,8 @@ const FaceManagement = ({ onClose }) => {
             try {
                 setStatus('Loading AI models...');
 
-                if (!window.faceapi) {
-                    const script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js';
-                    script.async = true;
-                    document.body.appendChild(script);
-
-                    await new Promise((resolve, reject) => {
-                        script.onload = resolve;
-                        script.onerror = reject;
-                    });
-                }
-
-                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+                await loadFaceApi();                       // shared with FaceLock / idle mode
+                const MODEL_URL = FACE_MODEL_URL;
 
                 await Promise.all([
                     window.faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
@@ -138,6 +133,7 @@ const FaceManagement = ({ onClose }) => {
             setNewFaceName('');
             stopCamera();
             setIsCapturing(false);
+            if (onRegistered) setTimeout(() => onRegistered(newFace), REGISTERED_PAUSE_MS);
         } catch (error) {
             console.error('Capture error:', error);
             setStatus('Capture failed. Please try again.');

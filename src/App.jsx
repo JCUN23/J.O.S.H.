@@ -920,7 +920,15 @@ const BatcomputerHub = () => {
 
   // Before the main return statement
   if (showOnboarding) {
-    return <OnboardingScreen onComplete={() => setShowOnboarding(false)} />;
+    return (
+      <OnboardingScreen
+        onComplete={({ verified } = {}) => {
+          setShowOnboarding(false);
+          // Just registered a face = just proved who's here: don't make them scan again.
+          if (verified) { startedLockedRef.current = true; setIsLocked(false); }
+        }}
+      />
+    );
   }
 
 

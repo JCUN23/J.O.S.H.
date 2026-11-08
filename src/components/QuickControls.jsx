@@ -38,7 +38,7 @@ const QuickControls = ({ theme }) => {
             {showFaceManagement && (
                 // Portal to <body> so the full-screen modal escapes the card's
                 // containing block (backdrop-filter/transform on ancestors would trap position: fixed).
-                createPortal(<FaceManagement onClose={() => setShowFaceManagement(false)} />, document.body)
+                createPortal(<FaceManagement onClose={() => setShowFaceManagement(false)} onRegistered={() => setShowFaceManagement(false)} />, document.body)
             )}
             {showBluetooth && (
                 <BluetoothWidget

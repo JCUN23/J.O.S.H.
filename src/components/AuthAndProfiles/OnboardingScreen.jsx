@@ -32,13 +32,19 @@ const OnboardingScreen = ({ onComplete }) => {
         onComplete();
     };
 
-    const handleFaceSetupComplete = () => {
+    // verified: a face was just registered, i.e. the owner is standing at the panel.
+    const handleFaceSetupComplete = ({ verified = false } = {}) => {
         localStorage.setItem('onboarding_completed', 'true');
-        onComplete();
+        onComplete({ verified });
     };
 
     if (showFaceSetup) {
-        return <FaceManagement onClose={handleFaceSetupComplete} isOnboarding={true} />;
+        return (
+            <FaceManagement
+                onClose={() => handleFaceSetupComplete()}
+                onRegistered={() => handleFaceSetupComplete({ verified: true })}
+            />
+        );
     }
 
     return (
