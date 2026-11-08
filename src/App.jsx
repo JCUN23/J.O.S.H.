@@ -11,7 +11,7 @@ import ScenesWidget from './components/ScenesWidget';
 import ActivityWidget from './components/ActivityWidget';
 import FrameTvWidget from './components/FrameTvWidget';
 import IdleMode from './components/IdleMode';
-import { createUtterance } from './utils/utterance';
+import { createUtterance, mergeSpeech } from './utils/utterance';
 import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT } from './utils/idlePrefs';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
@@ -565,8 +565,9 @@ const BatcomputerHub = () => {
       setVoiceError('');
       // Build full transcript from all results
       let fullTranscript = '';
+      // mergeSpeech, not +=: Android can deliver stacked segments that repeat each other
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        fullTranscript += event.results[i][0].transcript;
+        fullTranscript = mergeSpeech(fullTranscript, event.results[i][0].transcript);
       }
 
       const isFinal = event.results[event.results.length - 1].isFinal;

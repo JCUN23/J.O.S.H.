@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { createUtterance, END_OF_SPEECH_MS } from './utterance';
+import { createUtterance, mergeSpeech, END_OF_SPEECH_MS } from './utterance';
 
 describe('createUtterance', () => {
     beforeEach(() => vi.useFakeTimers());
@@ -17,6 +17,17 @@ describe('createUtterance', () => {
         vi.advanceTimersByTime(END_OF_SPEECH_MS);
         expect(done).toHaveBeenCalledTimes(1);
         expect(done).toHaveBeenCalledWith('turn on the lights');
+    });
+
+    it('Android re-sending earlier words does not double them (Nov 8 bug #2)', () => {
+        const done = vi.fn();
+        const u = createUtterance({ onDone: done });
+        u.push({ partial: 'what is on' });
+        u.push({ final: 'what is on my' });
+        expect(u.push({ partial: 'what is on my calendar' })).toBe('what is on my calendar');
+        u.push({ final: 'what is on my calendar this weekend' });
+        vi.advanceTimersByTime(END_OF_SPEECH_MS);
+        expect(done).toHaveBeenCalledWith('what is on my calendar this weekend');
     });
 
     it('drops fragments too short to be a command, and cancel discards', () => {
@@ -39,5 +50,16 @@ describe('createUtterance', () => {
         u.push({ partial: 'jazz' });
         vi.advanceTimersByTime(END_OF_SPEECH_MS);
         expect(done).toHaveBeenCalledWith('play some jazz');
+    });
+});
+
+describe('mergeSpeech', () => {
+    it('joins separate pieces (desktop) and overlapping ones (Android)', () => {
+        expect(mergeSpeech('turn on', 'the lights')).toBe('turn on the lights');
+        expect(mergeSpeech('turn on', 'turn on the lights')).toBe('turn on the lights');
+        expect(mergeSpeech('turn on the', 'the lights')).toBe('turn on the lights');
+        expect(mergeSpeech('turn on the lights', 'lights')).toBe('turn on the lights');
+        expect(mergeSpeech('Turn on,', 'turn on the lights')).toBe('Turn on, the lights');
+        expect(mergeSpeech('', 'movie night')).toBe('movie night');
     });
 });
