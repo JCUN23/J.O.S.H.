@@ -61,3 +61,19 @@ test('ESPN down: says so and tells the model not to guess', async () => {
   const r = await sports.answer('NFL', { now, fetchImpl: async () => { throw new Error('offline'); } });
   assert.match(r, /Couldn't reach ESPN.*Don't guess/);
 });
+
+test('games missing from a team schedule are found on the league scoreboards (Nov 8: missed games)', async () => {
+  sports._clearCache();
+  const withIds = (e, awayId, homeId) => { const [a, h] = e.competitions[0].competitors; a.team.id = awayId; h.team.id = homeId; return e; };
+  // Pistons vs Lakers tonight: on the NBA scoreboard, not in the Pistons' schedule feed
+  FEEDS['/basketball/nba/scoreboard'].events.push(withIds(ev('N3', at(8, 18), 'pre', ['Lakers'], ['Pistons'], { tv: 'FanDuel SN DET' }), '13', '8'));
+  // Barça in the Champions League: soccer team schedules only cover their own league
+  FEEDS['/soccer/uefa.champions/scoreboard'] = { events: [withIds(ev('U1', at(8, 12), 'post', ['Barcelona', 2], ['Inter', 1]), '83', '110')] };
+  const r = await ask('what games are on today');
+  assert.match(r, /Detroit Pistons: Lakers at Pistons, today 6:00 PM on FanDuel SN DET/);
+  assert.match(r, /FC Barcelona: Final: Barcelona 2, Inter 1/);
+  assert.match(r, /FC Barcelona: Barcelona at Sevilla/, 'the schedule game is still there, once');
+  assert.equal((r.match(/Packers 10, Lions 14/g) || []).length, 1);
+  delete FEEDS['/soccer/uefa.champions/scoreboard'];
+  FEEDS['/basketball/nba/scoreboard'].events.pop();
+});

@@ -59,11 +59,42 @@ async function teamSchedule(team, fetchImpl) {
   return (await getJson(team.scheduleUrl, fetchImpl))?.events || [];
 }
 
+// A team's games on a date. Its schedule feed alone misses games (soccer schedules skip
+// other competitions, some feeds list only results), so cross-check the league
+// scoreboards for that date, which list everything played that day (Nov 8: "what games
+// are on today" missed games). Throws only if every source failed (ESPN down).
+const SCOREBOARD_EXTRA = { 'soccer/esp.1': ['soccer/uefa.champions', 'soccer/esp.copa_del_rey'] };
+// College scoreboards default to featured games only: ask for all of Division I / FBS
+const SCOREBOARD_PARAMS = { 'basketball/mens-college-basketball': '&groups=50&limit=400', 'football/college-football': '&groups=80&limit=400' };
+const leagueOf = (team) => { const m = team.scheduleUrl.match(/sports\/(.+)\/teams\/(\d+)\/schedule/); return m ? { path: m[1], id: m[2] } : null; };
+const involves = (e, id) => (e.competitions?.[0]?.competitors || []).some((c) => String(c.team?.id ?? c.id) === String(id));
+
+async function gamesOn(team, now, fetchImpl) {
+  const day = dayKey(now);
+  const found = new Map();
+  let ok = 0, tried = 0;
+  const take = (events, check = () => true) => {
+    for (const e of events) if (dayKey(new Date(e.date)) === day && check(e)) found.set(String(e.id), e);
+  };
+  tried++;
+  try { take(await teamSchedule(team, fetchImpl)); ok++; } catch { /* scoreboards may still know */ }
+  const lg = leagueOf(team);
+  for (const path of lg ? [lg.path, ...(SCOREBOARD_EXTRA[lg.path] || [])] : []) {
+    tried++;
+    try {
+      const data = await getJson(`${ESPN}/${path}/scoreboard?dates=${day}${SCOREBOARD_PARAMS[path] || ''}`, fetchImpl);
+      take(data?.events || [], (e) => involves(e, lg.id));
+      ok++;
+    } catch { /* one feed failing shouldn't sink the answer */ }
+  }
+  if (!ok && tried) throw new Error('ESPN unreachable');
+  return [...found.values()].sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
 async function teamAnswer(team, now, fetchImpl) {
-  const events = await teamSchedule(team, fetchImpl);
-  const today = dayKey(now);
-  const todays = events.filter((e) => dayKey(new Date(e.date)) === today);
+  const todays = await gamesOn(team, now, fetchImpl);
   if (todays.length) return `${team.name}: ${todays.map((e) => describe(e, now)).join('; ')}`;
+  const events = await teamSchedule(team, fetchImpl).catch(() => []);
   const next = events.find((e) => new Date(e.date) > now && (e.competitions?.[0]?.status?.type?.state || 'pre') === 'pre');
   const last = [...events].reverse().find((e) => e.competitions?.[0]?.status?.type?.state === 'post');
   const parts = [`${team.name} don't play today.`];
@@ -73,7 +104,7 @@ async function teamAnswer(team, now, fetchImpl) {
 }
 
 async function leagueToday(league, now, fetchImpl) {
-  const data = await getJson(`${ESPN}/${league.path}/scoreboard?dates=${dayKey(now)}`, fetchImpl);
+  const data = await getJson(`${ESPN}/${league.path}/scoreboard?dates=${dayKey(now)}${SCOREBOARD_PARAMS[league.path] || ''}`, fetchImpl);
   const events = (data?.events || []).filter((e) => dayKey(new Date(e.date)) === dayKey(now));
   if (!events.length) return `No ${league.label} games today.`;
   const lines = events.slice(0, 8).map((e) => describe(e, now));
@@ -92,14 +123,17 @@ async function answer(query = '', { now = new Date(), fetchImpl = fetch } = {}) 
     const today = dayKey(now);
     const lines = [];
     const nexts = [];
+    let reached = 0;
     for (const t of TEAMS) {
       try {
-        const events = await teamSchedule(t, fetchImpl);
-        for (const e of events.filter((ev) => dayKey(new Date(ev.date)) === today)) lines.push(`${t.name}: ${describe(e, now)}`);
+        for (const e of await gamesOn(t, now, fetchImpl)) lines.push(`${t.name}: ${describe(e, now)}`);
+        reached++;
+        const events = await teamSchedule(t, fetchImpl).catch(() => []);
         const next = events.find((e) => new Date(e.date) > now && dayKey(new Date(e.date)) !== today);
         if (next) nexts.push({ t, e: next });
-      } catch { /* one team's feed failing shouldn't sink the answer */ }
+      } catch { /* one team's feeds failing shouldn't sink the answer */ }
     }
+    if (!reached) throw new Error('ESPN unreachable');
     if (lines.length) return `Today: ${lines.join('; ')}`;
     nexts.sort((a, b) => new Date(a.e.date) - new Date(b.e.date));
     return `None of Josh's teams (${TEAMS.map((t) => t.name).join(', ')}) play today.${nexts[0] ? ` Next up: ${nexts[0].t.name}, ${describe(nexts[0].e, now)}.` : ''}`;
