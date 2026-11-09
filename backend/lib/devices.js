@@ -125,6 +125,14 @@ async function hueApply({ on, brightness, color, colorFor, kelvin, lightIds }) {
     return errs.length ? `Hue: failed: ${errs.join('; ')}` : `Hue: ${lightIds.length} lights set`;
   }
   const state = hueState({ on, brightness, color, kelvin });
+  const hueLights = require('./hueLights');
+  if (hueLights.filtering()) {
+    // "All" = the lights Josh uses (HUE_LIGHTS), not every bulb the bridge knows.
+    const ids = Object.keys(hueLights.filterLights((await axios.get(`${base}/lights`)).data) || {});
+    const replies = await Promise.all(ids.map((id) => axios.put(`${base}/lights/${id}/state`, state)));
+    const errs = [...new Set(replies.flatMap(hueErrors))];
+    return errs.length ? `Hue: failed: ${errs.join('; ')}` : `Hue: ${ids.length} lights ${state.on ? 'set' : 'off'}`;
+  }
   const errs = [...new Set(hueErrors(await axios.put(`${base}/groups/0/action`, state)))];
   return errs.length ? `Hue: failed: ${errs.join('; ')}` : `Hue: all lights ${state.on ? 'set' : 'off'}`;
 }

@@ -42,7 +42,7 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
 
       // Map friendly names → bridge IDs
       const lightsRes = await axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights`);
-      const allLights = Object.entries(lightsRes.data).map(([id, l]) => ({ id, ...l }));
+      const allLights = Object.entries(require('../hueLights').filterLights(lightsRes.data)).map(([id, l]) => ({ id, ...l }));
 
       // Filter to target
       let targets;
@@ -210,7 +210,7 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
             if (HUE_BRIDGE_IP && HUE_USERNAME) {
               const hsb = rgbToHueBridgeHSB({ r, g, b });
               const lightsRes = await axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights`);
-              const hueIds = Object.keys(lightsRes.data);
+              const hueIds = Object.keys(require('../hueLights').filterLights(lightsRes.data));
               await Promise.all(hueIds.map(id =>
                 axios.put(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights/${id}/state`, { on: true, ...hsb })
               ));

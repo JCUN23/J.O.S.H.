@@ -2,6 +2,7 @@
 const express = require('express');
 const axios = require('axios');
 const { HUE_BRIDGE_IP, HUE_USERNAME } = require('../lib/config');
+const { filterLights, filterGroups } = require('../lib/hueLights');
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.get('/api/hue/lights', async (req, res) => {
     }
 
     const response = await axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights`);
-    sendHueRead(res, response.data);
+    sendHueRead(res, filterLights(response.data));     // only HUE_LIGHTS (the two Go lamps)
   } catch (error) {
     console.error('Hue lights error:', error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data || error.message });
@@ -66,8 +67,11 @@ router.get('/api/hue/groups', async (req, res) => {
       return res.status(401).json({ error: 'Hue Bridge not configured' });
     }
 
-    const response = await axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/groups`);
-    sendHueRead(res, response.data);
+    const [response, lights] = await Promise.all([
+      axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/groups`),
+      axios.get(`http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}/lights`),
+    ]);
+    sendHueRead(res, filterGroups(response.data, lights.data));
   } catch (error) {
     console.error('Hue groups error:', error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data || error.message });

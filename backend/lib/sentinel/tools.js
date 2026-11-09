@@ -39,7 +39,7 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "control_hue_lights",
-      description: "Control Philips Hue lights (Hue Go portable lights, Hue color lamps). Devices: 'Left Go', 'Right Go', 'Hue color lamp 1/2/3'",
+      description: "Control the Philips Hue lights: two Hue Go portable lamps, 'Left Go' and 'Right Go'",
       parameters: {
         type: "object",
         properties: {

@@ -7,6 +7,7 @@ const { mockModules, tempStores, startApp } = require('./helpers');
 const dir = tempStores();
 for (const k of ['ACTIVITY', 'SCENES', 'RULES', 'GAMEDAY']) process.env[`${k}_STORE_PATH`] = path.join(dir, `${k.toLowerCase()}.json`);
 Object.assign(process.env, { GOVEE_API_KEY: 'k', HUE_BRIDGE_IP: '10.0.0.2', HUE_USERNAME: 'u', SMARTTHINGS_TOKEN: 'PAT' });
+process.env.HUE_LIGHTS = '*';   // scene actions here; the Go-only filter has its own test (hueLights.test.js)
 delete process.env.HOME_LAT; delete process.env.HOME_LON;
 
 process.env.GOVEE_GAP_MS = '0';
