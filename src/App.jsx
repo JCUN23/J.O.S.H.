@@ -921,7 +921,7 @@ const BatcomputerHub = () => {
     }
   };
 
-  const quoteTab = <div className={`col-span-12 border border-${theme}-800 rounded-lg p-3 text-${theme}-400`}>
+  const quoteTab = <div className={`hud-quote col-span-12 border border-${theme}-800 rounded-lg p-3 text-${theme}-400`} title={`${quoteText} - ${quoteAuthor}`}>
     <p>{quoteText}<a> - {quoteAuthor}</a></p>
   </div>
 
@@ -985,7 +985,7 @@ const BatcomputerHub = () => {
       />
       <div data-hud={theme} data-mode={mode} className={`hud-root min-h-screen font-mono p-4 border border border-${theme}-800 ${isLocked ? 'blur-xl pointer-events-none' : ''}`}
         >
-        <div className="max-w-[95%] mx-auto">
+        <div className="hud-shell max-w-[95%] mx-auto">
           <Header
             time={time}
             setTheme={setTheme}
@@ -1003,7 +1003,7 @@ const BatcomputerHub = () => {
           />
 
           {/* Fixed Top Section - Always visible */}
-          <div className="hud-stack mb-4 space-y-4 lg:mb-3 lg:space-y-3">
+          <div className="hud-stack mb-4 space-y-4 lg:mb-2 lg:space-y-2">
             <SystemStatus theme={theme} isSpotifyConnected={token} isNewsConnected={isNewsOnline} isGoveeConnected={goveeIsConnected} isSmartThingsConnected={smartThingsIsConnected} isHueConnected={hueIsConnected} />
             {quoteTab}
             <VoiceAssistant

@@ -262,3 +262,34 @@ body { background: #020407; }
   /* Flex-column widgets: only the growing part (flex-1, e.g. a list) may shrink to fit. */
   .hud-grid .hud-cell > :first-child > :not(.flex-1) { flex-shrink: 0; }
 }
+
+/* ---------- One screen, no vertical scrolling (tablet / laptop) ----------
+   The wall panel is a fixed screen: the page is exactly the viewport tall, the top bars
+   take only what they need, and the widget grid gets the rest as two equal rows (each
+   widget scrolls inside its own cell; more columns scroll sideways). Phones keep the
+   normal scrolling column. (Nov 9: on the Tab S7+ the second widget row was cut off.) */
+@media (min-width: 1024px) {
+  .hud-root { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding: 0.75rem 1rem; }
+  .hud-root .hud-shell { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; flex-direction: column; }
+  .hud-root .hud-shell > * { flex-shrink: 0; }
+  .hud-root .hud-shell > .hud-gridwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .hud-root .hud-gridwrap > * { flex-shrink: 0; }
+  .hud-root .hud-gridwrap > .hud-grid { flex: 1 1 auto; min-height: 0; }
+
+  /* Compact top bars */
+  .hud-root .hud-header { margin-bottom: 0.5rem; padding-bottom: 0.5rem; }
+  .hud-root .hud-quote { padding: 0.375rem 0.75rem; font-size: 0.875rem; }
+  .hud-root .hud-quote p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud-root .hud-voice { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  .hud-root .hud-voice > :first-child { margin-bottom: 0; }
+  /* One line: title and buttons never wrap; the subtitle gets cut short first */
+  .hud-root .hud-voice > :first-child { gap: 0.75rem; }
+  .hud-root .hud-voice > :first-child > :first-child { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .hud-root .hud-voice > :first-child > :last-child { flex-shrink: 0; }
+  .hud-root .hud-voice h2, .hud-root .hud-voice button, .hud-root .hud-voice > :first-child > :last-child > * { white-space: nowrap; }
+  .hud-root .hud-voice h4 { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud-root .hud-voice > :not(:first-child) { margin-top: 0.5rem; margin-bottom: 0; }
+  /* While talking, the transcript/response stay one compact block instead of shoving the grid */
+  .hud-root .hud-voice > :not(:first-child) { padding: 0.5rem 0.75rem; max-height: 5.5rem; overflow-y: auto; }
+  .hud-root .hud-voice .text-lg { font-size: 1rem; line-height: 1.4; }
+}

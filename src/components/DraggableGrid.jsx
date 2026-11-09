@@ -132,7 +132,7 @@ const DraggableGrid = ({ children, theme = 'cyan', editMode: editModeProp, onEdi
     };
 
     return (
-        <div className="w-full">
+        <div className="hud-gridwrap w-full">
             {/* Edit Mode Toggle (controlled mode: only while editing, entered from the Widgets menu) */}
             {(!controlled || editMode) && <div className="flex justify-end mb-3 gap-2">
                 {editMode && (

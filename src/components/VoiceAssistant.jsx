@@ -78,7 +78,7 @@ const VoiceAssistant = ({
         : 'WAKE WORD INACTIVE';
 
     return (
-        <div className={`col-span-12 bg-gradient-to-r from-${theme}-100 to-${theme}-200 border border-${theme}-800 rounded-lg p-3 px-6`}>
+        <div className={`hud-voice col-span-12 bg-gradient-to-r from-${theme}-100 to-${theme}-200 border border-${theme}-800 rounded-lg p-3 px-6`}>
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                     <Cpu className={`text-${theme}-400`} size={24} />
