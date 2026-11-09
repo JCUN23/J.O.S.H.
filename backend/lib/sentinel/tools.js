@@ -245,6 +245,63 @@ const SENTINEL_TOOLS = [
       description: "Josh's rundown of the day in one go: weather, today's calendar, his teams' games, today's reminders. Use for 'brief me', 'what's my day look like', 'catch me up'. Read it out as returned.",
       parameters: { type: "object", properties: {} }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "Look something up on the live web: news, results of games outside Josh's teams, business hours, facts that may have changed, anything the other tools don't cover. Not for things another tool handles (his teams, calendar, weather, devices).",
+      parameters: { type: "object", properties: { query: { type: "string", description: "What to find out, as a clear question" } }, required: ["query"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "remember_fact",
+      description: "Save something Josh explicitly asks you to remember long-term (a preference, a date, a detail). Only when he asks ('remember that...', 'keep in mind...').",
+      parameters: { type: "object", properties: { fact: { type: "string", description: "The fact in one clear sentence, e.g. 'Josh likes the lights at 40% after 9 PM'" } }, required: ["fact"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "forget_fact",
+      description: "Remove things from long-term memory when Josh asks you to forget them. 'everything' clears it.",
+      parameters: { type: "object", properties: { about: { type: "string", description: "Words that identify what to forget" } }, required: ["about"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_memories",
+      description: "What's in long-term memory ('what do you remember about me').",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_calendar_event",
+      description: "Add an event to Josh's Google Calendar ('add dinner Friday at 7', 'put the dentist on Tuesday at 9:30'). Work out the exact date from today's date. Confirm what you added.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          start: { type: "string", description: "Local start 'YYYY-MM-DDTHH:MM', or 'YYYY-MM-DD' for an all-day event" },
+          duration_minutes: { type: "number", description: "Default 60" },
+          calendar: { type: "string", description: "Only if Josh names a calendar (e.g. a shared one); default is his own" }
+        },
+        required: ["title", "start"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "undo_calendar_event",
+      description: "Remove the event you just added ('undo that', 'take that off the calendar').",
+      parameters: { type: "object", properties: {} }
+    }
   }
 ];
 

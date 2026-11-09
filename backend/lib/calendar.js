@@ -81,4 +81,67 @@ async function answer(when, { now = new Date(), token } = {}) {
   }
 }
 
-module.exports = { answer, events, windowFor };
+// ---- writing ("add dinner Friday at 7") ----
+// Needs the calendar.events permission: a Google login from before it was added gets a
+// clear "reconnect" message instead of a raw 403.
+let lastCreated = null;      // { calendarId, eventId, title } for "undo that"
+const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+const pad = (n) => String(n).padStart(2, '0');
+const localStamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+const SCOPE_HINT = "Alfred can't write to the calendar yet: open the Calendar widget, disconnect Google and connect it again (allow calendar access) so it includes permission to add events.";
+
+// start: "2026-11-20T19:00" (local) or "2026-11-20" (all day)
+async function createEvent({ title, start, durationMinutes = 60, calendar } = {}, { token, now = new Date() } = {}) {
+  if (!title || !start) return 'I need a title and a date/time for the event.';
+  const allDay = /^\d{4}-\d{2}-\d{2}$/.test(String(start).trim());
+  const begin = allDay ? null : new Date(String(start).trim().replace(' ', 'T'));
+  if (!allDay && Number.isNaN(begin?.getTime())) return `I couldn't read the time "${start}".`;
+  if (!allDay && begin < new Date(now.getTime() - 3600e3)) return `That time (${begin.toLocaleString('en-US')}) is in the past.`;
+  try {
+    token = token || await googleToken();
+    if (!token) return 'Google Calendar is not connected. Josh can connect it from the Calendar widget.';
+    const headers = { Authorization: `Bearer ${token}` };
+    let calendarId = 'primary';
+    let calName = 'your calendar';
+    if (calendar) {
+      const { data } = await axios.get(`${API}/users/me/calendarList`, { headers });
+      const writable = (data.items || []).filter((c) => ['owner', 'writer'].includes(c.accessRole));
+      const hit = writable.find((c) => String(c.summary).toLowerCase().includes(String(calendar).toLowerCase()));
+      if (!hit) return `I can't add to a calendar called "${calendar}" (writable: ${writable.map((c) => c.summary).join(', ') || 'none'}).`;
+      calendarId = hit.id; calName = hit.summary;
+    }
+    let body;
+    if (allDay) {
+      const [y, m, d] = String(start).split('-').map(Number);
+      const next = new Date(y, m - 1, d + 1);
+      body = { summary: title, start: { date: start }, end: { date: `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}` } };
+    } else {
+      const end = new Date(begin.getTime() + Math.max(5, Number(durationMinutes) || 60) * 60_000);
+      body = { summary: title, start: { dateTime: localStamp(begin), timeZone: tz() }, end: { dateTime: localStamp(end), timeZone: tz() } };
+    }
+    const { data } = await axios.post(`${API}/calendars/${encodeURIComponent(calendarId)}/events`, body, { headers });
+    lastCreated = { calendarId, eventId: data.id, title };
+    const when = allDay
+      ? new Date(...String(start).split('-').map((n, i) => (i === 1 ? n - 1 : +n))).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + ' (all day)'
+      : begin.toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return `Added "${title}" to ${calName}: ${when}.`;
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    if (err.response?.status === 403 || /insufficient|scope/i.test(msg)) return SCOPE_HINT;
+    return `Couldn't add the event (${msg}).`;
+  }
+}
+
+async function undoLast({ token } = {}) {
+  if (!lastCreated) return "I haven't added any events recently.";
+  try {
+    token = token || await googleToken();
+    await axios.delete(`${API}/calendars/${encodeURIComponent(lastCreated.calendarId)}/events/${encodeURIComponent(lastCreated.eventId)}`, { headers: { Authorization: `Bearer ${token}` } });
+    const { title } = lastCreated; lastCreated = null;
+    return `Removed "${title}" from the calendar.`;
+  } catch (err) {
+    return `Couldn't remove it (${err.response?.data?.error?.message || err.message}).`;
+  }
+}
+
+module.exports = { answer, events, windowFor, createEvent, undoLast };

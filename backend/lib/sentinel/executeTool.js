@@ -73,6 +73,16 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     }
   }
 
+  // ===== WEB / MEMORY / CALENDAR WRITES =====
+  if (toolName === 'web_search') return require('./webSearch').webSearch(args.query);
+  if (toolName === 'remember_fact') return require('./longMemory').remember(args.fact);
+  if (toolName === 'forget_fact') return require('./longMemory').forget(args.about);
+  if (toolName === 'list_memories') return require('./longMemory').list();
+  if (toolName === 'create_calendar_event') {
+    return require('../calendar').createEvent({ title: args.title, start: args.start, durationMinutes: args.duration_minutes, calendar: args.calendar });
+  }
+  if (toolName === 'undo_calendar_event') return require('../calendar').undoLast();
+
   // ===== BRIEFING ("brief me", "what's my day look like") =====
   if (toolName === 'get_briefing') return require('../briefing').compose('ask');
 

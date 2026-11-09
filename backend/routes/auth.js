@@ -32,6 +32,7 @@ const REFRESHERS = { google: refreshGoogle, microsoft: refreshMicrosoft };
 router.get('/auth/google', (req, res) => {
   const scopes = [
     'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.events',     // Alfred adds events ("add dinner Friday at 7")
     'https://www.googleapis.com/auth/userinfo.email'
   ].join(' ');
 

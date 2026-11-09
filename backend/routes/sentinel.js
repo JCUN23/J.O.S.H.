@@ -17,10 +17,10 @@ const groqParams = () => ({
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const FALLBACK_MODEL = () => process.env.GROQ_FALLBACK_MODEL ?? 'openai/gpt-oss-20b';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function groqPost(body) {
+async function groqPost(body, { timeout = 15000 } = {}) {
   const post = (b) => axios.post(GROQ_URL, b, {
     headers: { Authorization: `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-    timeout: 15000,
+    timeout,
   });
   try {
     return await post(body);
@@ -71,10 +71,12 @@ async function runAgent(message, { spotifyToken, history = [] } = {}) {
 
   // Build initial messages array — this grows every iteration
   const messages = [
-    { role: 'system', content: `${SENTINEL_SYSTEM_PROMPT}\n\nRight now it is ${new Date().toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.` },
+    { role: 'system', content: `${SENTINEL_SYSTEM_PROMPT}\n\nRight now it is ${new Date().toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.${require('../lib/sentinel/longMemory').promptBlock()}` },
     ...history,                                   // the last few exchanges: follow-ups work
     { role: 'user', content: message }
   ];
+  // Only the tool groups this request can need (lib/sentinel/toolRouter.js): saves tokens
+  const requestTools = require('../lib/sentinel/toolRouter').pickTools(SENTINEL_TOOLS, message, history);
 
   const MAX_ITERATIONS = 5; // Safety valve — prevent infinite loops
   let iterations = 0;
@@ -90,7 +92,7 @@ async function runAgent(message, { spotifyToken, history = [] } = {}) {
     // Groq returns tool_use_failed. We retry without tools so it just responds naturally.
     let choice;
     try {
-      const response = await groqPost({ ...groqParams(), messages, tools: SENTINEL_TOOLS, tool_choice: 'auto' });
+      const response = await groqPost({ ...groqParams(), messages, tools: requestTools, tool_choice: 'auto' });
       choice = response.data.choices[0];
     } catch (groqErr) {
       // Llama tried to force a tool call and failed — retry without tools
@@ -203,3 +205,4 @@ router.post('/api/sentinel/chat', async (req, res) => {
 
 module.exports = router;
 module.exports.runSentinel = runSentinel;
+module.exports.groqPost = groqPost;
