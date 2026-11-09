@@ -41,6 +41,9 @@ function announce(outcome) {
   const title = outcome === 'finished' ? `Print done: ${job}` : `Print failed: ${job}`;
   const detail = outcome === 'finished' ? `Finished${took}.` : `Stopped at ${s.print.mc_percent ?? '?'}%${took}. Check the printer.`;
   activity.log({ source: 'printer', title, results: [outcome === 'finished' ? `printer: ${detail}` : `error: ${detail}`] });
+  try {
+    require('../routes/voice').announce(outcome === 'finished' ? `Your print, ${job}, is finished.` : `Heads up: the print ${job} stopped at ${s.print.mc_percent ?? 'an unknown'} percent.`);
+  } catch { /* no panel */ }
   notify({ title, message: detail, category: 'print', priority: outcome === 'finished' ? 4 : 5,
     tags: [outcome === 'finished' ? 'white_check_mark' : 'x'] });
   s.lastJob = null;

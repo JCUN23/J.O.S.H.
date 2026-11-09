@@ -237,6 +237,14 @@ const SENTINEL_TOOLS = [
       description: "Cancel timers/reminders: by label ('pasta'), by kind ('timer', 'reminder'), or 'all'.",
       parameters: { type: "object", properties: { label: { type: "string" } } }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_briefing",
+      description: "Josh's rundown of the day in one go: weather, today's calendar, his teams' games, today's reminders. Use for 'brief me', 'what's my day look like', 'catch me up'. Read it out as returned.",
+      parameters: { type: "object", properties: {} }
+    }
   }
 ];
 

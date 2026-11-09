@@ -73,6 +73,9 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     }
   }
 
+  // ===== BRIEFING ("brief me", "what's my day look like") =====
+  if (toolName === 'get_briefing') return require('../briefing').compose('ask');
+
   // ===== TIMERS & REMINDERS (lib/timers.js) =====
   if (toolName === 'set_timer') return require('../timers').setTimer(args);
   if (toolName === 'set_reminder') return require('../timers').setReminder(args);

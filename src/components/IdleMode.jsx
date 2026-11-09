@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadFaceDetector } from '../utils/faceApiLoader';
-import { WAKE_EVENT } from '../utils/idlePrefs';
+import { WAKE_EVENT, ARRIVED_EVENT } from '../utils/idlePrefs';
 import IdleCave from './IdleCave';
 
 const TICKS = Array.from({ length: 60 }, (_, i) => i);
 
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
 const wake = () => window.dispatchEvent(new Event(WAKE_EVENT));
+// Leaving the idle screen because someone showed up (face or tap): the cue for Alfred's
+// morning briefing / welcome home. Voice and alerts wake the panel without it.
+const arrived = () => { window.dispatchEvent(new Event(ARRIVED_EVENT)); wake(); };
 
 // After `minutes` without a touch, the panel fades to a dim clock in an animated batcave.
 // Wakes on touch, on the wake word (WAKE_EVENT), or when the camera sees any face.
@@ -61,7 +64,7 @@ const IdleMode = ({ enabled, paused, minutes = 3, theme }) => {
                 const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 });
                 timer = setInterval(async () => {
                     if (document.hidden || !alive) return;
-                    try { if (await faceapi.detectSingleFace(video, opts)) wake(); } catch { /* frame not ready */ }
+                    try { if (await faceapi.detectSingleFace(video, opts)) arrived(); } catch { /* frame not ready */ }
                 }, 1500);
             } catch {
                 if (alive) setNote('Tap anywhere to wake');
@@ -83,7 +86,7 @@ const IdleMode = ({ enabled, paused, minutes = 3, theme }) => {
             data-hud={theme}
             role="button"
             aria-label="Wake the panel"
-            onPointerDown={wake}
+            onPointerDown={arrived}
             className="idle-root fixed inset-0 z-[200] bg-black select-none overflow-hidden"
         >
             <IdleCave />

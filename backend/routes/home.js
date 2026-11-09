@@ -10,6 +10,9 @@ const router = express.Router();
 router.get('/api/timers', (req, res) => res.json({ items: require('../lib/timers').list(), now: Date.now() }));
 router.post('/api/timers/cancel', (req, res) => res.json({ result: require('../lib/timers').cancel(req.body?.label) }));
 
+// The panel saw Josh after its idle screen: maybe a morning briefing or a welcome home.
+router.post('/api/briefing/arrived', async (req, res) => res.json(await require('../lib/briefing').onArrived()));
+
 // Home location for the weather widget, from .env (HOME_LAT/HOME_LON): kept out of the
 // public repo. Only reachable on the tailnet, like the rest of the panel.
 router.get('/api/home/location', (req, res) => {

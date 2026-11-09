@@ -12,7 +12,7 @@ import ActivityWidget from './components/ActivityWidget';
 import FrameTvWidget from './components/FrameTvWidget';
 import IdleMode from './components/IdleMode';
 import { createUtterance, mergeSpeech } from './utils/utterance';
-import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT } from './utils/idlePrefs';
+import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT, ARRIVED_EVENT } from './utils/idlePrefs';
 import { getVoicePanel, setVoicePanel, connectPiVoice, reportSpeaking } from './utils/piVoice';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
@@ -438,6 +438,24 @@ const BatcomputerHub = () => {
   useEffect(() => { processVoiceCommandRef.current = processVoiceCommand; }, [processVoiceCommand]);
   const speakRef = useRef(speak);
   useEffect(() => { speakRef.current = speak; }, [speak]);
+
+  // The idle screen saw Josh: the backend decides whether that earns a morning briefing or
+  // a welcome home (once a day / once per arrival). Only the voice panel speaks it.
+  useEffect(() => {
+    if (!voicePanel) return undefined;
+    const onArrived = async () => {
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/briefing/arrived`, { method: 'POST' });
+        const { text } = await r.json();
+        if (!text || processingRef.current) return;
+        setTranscript(''); setResponse(text);
+        reportSpeaking(true);
+        try { await speakRef.current(text); } finally { reportSpeaking(false); }
+      } catch { /* backend unreachable: no briefing */ }
+    };
+    window.addEventListener(ARRIVED_EVENT, onArrived);
+    return () => window.removeEventListener(ARRIVED_EVENT, onArrived);
+  }, [voicePanel]);
   useEffect(() => {
     if (!voicePanel || isLocked || showOnboarding) return undefined;
     return connectPiVoice({

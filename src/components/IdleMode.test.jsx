@@ -4,7 +4,7 @@ import { render, screen, cleanup, act, fireEvent } from '@testing-library/react'
 vi.mock('./IdleCave', () => ({ default: () => null }));
 vi.mock('../utils/faceApiLoader', () => ({ loadFaceDetector: () => Promise.reject(new Error('no camera in tests')) }));
 import IdleMode from './IdleMode';
-import { WAKE_EVENT } from '../utils/idlePrefs';
+import { WAKE_EVENT, ARRIVED_EVENT } from '../utils/idlePrefs';
 
 const overlay = () => screen.queryByRole('button', { name: 'Wake the panel' });
 
@@ -40,5 +40,20 @@ describe('IdleMode', () => {
         rerender(<IdleMode enabled paused minutes={3} theme="cyan" />);
         act(() => { vi.advanceTimersByTime(10 * 60000); });
         expect(overlay()).toBeNull();
+    });
+
+    it('tapping the idle screen signals an arrival (briefing cue); a voice wake does not', () => {
+        vi.useFakeTimers();
+        const arrivals = vi.fn();
+        window.addEventListener(ARRIVED_EVENT, arrivals);
+        render(<IdleMode enabled minutes={1} theme="cyan" />);
+        act(() => { vi.advanceTimersByTime(61_000); });
+        act(() => { window.dispatchEvent(new Event(WAKE_EVENT)); });
+        expect(arrivals).not.toHaveBeenCalled();
+        act(() => { vi.advanceTimersByTime(61_000); });
+        fireEvent.pointerDown(screen.getByLabelText('Wake the panel'));
+        expect(arrivals).toHaveBeenCalledTimes(1);
+        window.removeEventListener(ARRIVED_EVENT, arrivals);
+        vi.useRealTimers();
     });
 });

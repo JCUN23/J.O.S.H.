@@ -107,6 +107,7 @@ async function activate(team, { lightsOnly = false, reason = 'manual', event = n
   state.set('last', entry);
   activity.log({ source: reason.startsWith('auto') ? 'gameday' : reason, title: `Game Day: ${team.name}`, results });
   if (reason.startsWith('auto')) {
+    try { require('../routes/voice').announce(`The ${team.name} game is on. Game Day lights are up.`); } catch { /* no panel */ }
     require('./notify').notify({ title: `${team.name} game is on`, message: `Game Day lights are up. ${results.join(' · ')}`,
       category: 'gameday', priority: 3, tags: ['tada'] });
   }

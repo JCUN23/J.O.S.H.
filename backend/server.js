@@ -90,7 +90,7 @@ if (require.main === module && process.env.RULES_AUTO !== 'false') {
 if (require.main === module) {
   require('./lib/uptime').start();
   const rules = require('./lib/rules');
-  require('./lib/presence').start({ onEvent: (e) => rules.handlePresence(e) });
+  require('./lib/presence').start({ onEvent: (e) => { rules.handlePresence(e); require('./lib/briefing').onPresence(e); } });
   require('./lib/bambu').start();
   require('./lib/timers').start();
 }
