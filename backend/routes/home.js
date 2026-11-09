@@ -28,4 +28,19 @@ router.post('/api/notify/test', async (req, res) => {
   res.status(r.sent ? 200 : 502).json(r);
 });
 
+// All lights on/off (the panel's "turn off the lights" shortcut). Govee + Hue through
+// lib/devices, which knows Govee's quirks: in-band errors, power-only models, rate limits.
+// (Nov 9: the old browser-side shortcut sent Govee commands blind, never touched Hue,
+// and said "Going dark" with every light still on.)
+router.post('/api/lights', async (req, res) => {
+  const on = req.body?.on !== false;
+  const devices = require('../lib/devices');
+  const results = (await Promise.allSettled([devices.goveeApply({ on }), devices.hueApply({ on })]))
+    .map((r) => (r.status === 'fulfilled' ? r.value : `error: ${r.reason?.response?.data?.message || r.reason?.message}`));
+  const ok = results.filter((r) => !/not configured/.test(r));
+  const failed = ok.filter((r) => /fail|error/i.test(r) || /: 0\//.test(r));
+  require('../lib/activity').log({ source: 'voice', title: `Lights ${on ? 'on' : 'off'}`, results });
+  res.json({ ok: ok.length > 0 && failed.length === 0, results, failed });
+});
+
 module.exports = router;

@@ -109,10 +109,7 @@ const COMMANDS = [
             /turn (on|up) (the |all |all the )?(lights?)/i,
             /lights? on/i
         ],
-        handler: async () => {
-            await controlGovee({ name: 'turn', value: 'on' });
-            return { response: randomResponse(RESPONSES.lightsOn) };
-        }
+        handler: async () => allLights(true, RESPONSES.lightsOn)
     },
 
     // All Lights OFF
@@ -121,10 +118,7 @@ const COMMANDS = [
             /turn (off|down) (the |all |all the )?(lights?)/i,
             /lights? off/i
         ],
-        handler: async () => {
-            await controlGovee({ name: 'turn', value: 'off' });
-            return { response: randomResponse(RESPONSES.lightsOff) };
-        }
+        handler: async () => allLights(false, RESPONSES.lightsOff)
     },
 
     // Set color
@@ -234,6 +228,24 @@ const COMMANDS = [
         }
     },
 ];
+
+// All lights (Govee + Hue) through the backend, which reports what actually happened.
+// Says so when something failed instead of a cheerful "Going dark" over lit lights.
+export async function allLights(on, okResponses) {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/lights`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ on }),
+        });
+        const data = await res.json();
+        if (data.ok) return { response: randomResponse(okResponses) };
+        if (!data.failed?.length) return { response: "I couldn't reach any lights." };
+        return { response: `Some lights didn't respond: ${data.failed.join('; ')}` };
+    } catch {
+        return { response: "I couldn't reach the lights." };
+    }
+}
 
 // Govee control helper
 async function controlGovee(cmd, deviceName = null) {
