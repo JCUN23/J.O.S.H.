@@ -1,6 +1,7 @@
 import { BACKEND_URL } from '../config';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import ColorStudio from './ColorStudio';
+import { keepSelected, saveSelected } from '../utils/selectedDevice';
 import { rgbToXy } from '../utils/color';
 import { Lightbulb, Power, Loader2, RefreshCw, Palette, ChevronDown, ChevronUp, Sun } from 'lucide-react';
 
@@ -21,10 +22,11 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
     const textClass = `text-${theme}-400`;
 
 
-    const loadLights = useCallback(async () => {
+    // quiet: a refresh after a change. No spinner (it unmounted everything: open sections
+    // collapsed) and the selected light stays selected (it used to snap back to the first).
+    const loadLights = useCallback(async ({ quiet = false } = {}) => {
         try {
-            setLoading(true);
-            setHueIsConnected(false);
+            if (!quiet) { setLoading(true); setHueIsConnected(false); }
             setError('');
 
             const [lightsRes, groupsRes] = await Promise.all([
@@ -56,9 +58,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
             setLights(lightsArray);
             setGroups(groupsArray);
 
-            if (lightsArray.length > 0) {
-                setSelectedLight(lightsArray[0]);
-            }
+            setSelectedLight((cur) => keepSelected(lightsArray, (l) => l.id, cur?.id, 'hue'));
 
             setLoading(false);
             setHueIsConnected(true);
@@ -88,7 +88,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
 
             setTimeout(() => {
                 setSending(false);
-                loadLights();
+                loadLights({ quiet: true });
             }, 500);
         } catch (err) {
             console.error('Control error:', err);
@@ -110,7 +110,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
 
             setTimeout(() => {
                 setSending(false);
-                loadLights();
+                loadLights({ quiet: true });
             }, 500);
         } catch (err) {
             console.error('Control error:', err);
@@ -178,7 +178,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                     {error}
                 </div>
                 <button
-                    onClick={loadLights}
+                    onClick={() => loadLights()}
                     className={`flex items-center justify-center gap-2 bg-${theme}-700 hover:bg-${theme}-600 text-white px-4 py-2 rounded transition-all font-mono text-sm`}
                 >
                     <RefreshCw size={16} />
@@ -210,7 +210,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                         No Hue lights found
                     </div>
                     <button
-                        onClick={loadLights}
+                        onClick={() => loadLights()}
                         className={`flex items-center justify-center gap-2 bg-${theme}-700 hover:bg-${theme}-600 text-white px-4 py-2 rounded transition-all font-mono text-sm mx-auto`}
                     >
                         <RefreshCw size={16} />
@@ -229,7 +229,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                     <h3 className={`text-lg font-semibold text-${theme}-400`}>PHILIPS HUE</h3>
                 </div>
                 <button
-                    onClick={loadLights}
+                    onClick={() => loadLights()}
                     className={`text-${theme}-500 hover:text-${theme}-400 transition-colors`}
                 >
                     <RefreshCw size={16} />
@@ -263,7 +263,8 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
             {lights.length > 1 && (
                 <select
                     value={selectedLight?.id}
-                    onChange={(e) => setSelectedLight(lights.find(l => l.id === e.target.value))}
+                    aria-label="Hue light"
+                    onChange={(e) => { const l = lights.find((x) => x.id === e.target.value); setSelectedLight(l); saveSelected('hue', l?.id); }}
                     className={`w-full bg-black/50 border ${borderClass} rounded px-3 py-2 ${textClass} font-mono text-sm mb-4 focus:outline-none`}
                 >
                     {lights.map(light => (
@@ -327,6 +328,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                                     type="range"
                                     min="1"
                                     max="254"
+                                    key={selectedLight.id}
                                     defaultValue={selectedLight.state?.bri || 127}
                                     onMouseUp={(e) => setBrightness(e.target.value)}
                                     onTouchEnd={(e) => setBrightness(e.target.value)}
@@ -350,7 +352,7 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                         </button>
                         {showColors && (
                             <div className="p-3 pt-0">
-                                <ColorStudio theme={theme} disabled={sending} onPreview={previewColor} onCommit={commitColor}
+                                <ColorStudio key={selectedLight.id} theme={theme} disabled={sending} onPreview={previewColor} onCommit={commitColor}
                                     note="Changes live while you drag." />
                             </div>
                         )}

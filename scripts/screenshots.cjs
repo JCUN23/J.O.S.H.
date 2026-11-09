@@ -216,11 +216,12 @@ async function handle(route) {
   await shoot('devices', { order: DEVICES, announce: false });
   // Close-up: the color studio, mid-drag (a held drag only previews, so nothing reloads)
   await shoot('color', {
-    order: DEVICES, announce: false, height: 1500, clip: '[data-testid="color-studio"]',
+    order: DEVICES, announce: false, height: 1500, clip: '[data-widget="phillips_hue"] [data-testid="color-studio"]',
     setup: async (page) => {
-      await page.getByRole('button', { name: /^Colors$/ }).click();
+      // The Hue widget's Colors section (Govee has one too)
+      await page.locator('[data-widget="phillips_hue"]').getByRole('button', { name: /^Colors$/ }).click();
       await page.waitForTimeout(300);
-      const wheel = page.locator('[data-testid="color-wheel"]').first();
+      const wheel = page.locator('[data-widget="phillips_hue"] [data-testid="color-wheel"]').first();
       await wheel.scrollIntoViewIfNeeded();
       const box = await wheel.boundingBox();
       const r = box.width / 2, cx = box.x + r, cy = box.y + r;
@@ -228,7 +229,7 @@ async function handle(route) {
       await page.mouse.move(...at(150, 0.3));
       await page.mouse.down();
       await page.mouse.move(...at(200, 0.85), { steps: 8 });   // Honolulu-ish blue, held
-      await page.evaluate(() => Object.assign(document.querySelector('[data-testid="color-studio"]').style, { padding: '20px', background: '#01080e', borderRadius: '12px' }));
+      await page.evaluate(() => Object.assign(document.querySelector('[data-widget="phillips_hue"] [data-testid="color-studio"]').style, { padding: '20px', background: '#01080e', borderRadius: '12px' }));
     },
   });
   // The idle screen: three quiet minutes later
