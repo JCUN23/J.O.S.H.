@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sentinel's ears on the Pi (systemd: sentinel-voice).
 
-  USB mic -> openWakeWord ("hey jarvis", on-device, always listening)
+  USB mic -> openWakeWord ("Alfred", on-device, always listening)
           -> on wake: record until you stop talking (loudness endpointing, max 10 s)
           -> POST the WAV to the backend (/api/voice/utterance), which transcribes it
              and hands it to the wall panel, or runs it itself when no panel is open
@@ -15,7 +15,7 @@ Only the few seconds after the wake word ever leave the Pi.
 
 Settings come from /opt/sentinel/backend/.env (environment variables win):
   VOICE_TOKEN        shared secret with the backend (voice-install.sh generates it)
-  VOICE_WAKE_MODEL   hey_jarvis
+  VOICE_WAKE_MODEL   alfred  (voice/models/<name>.onnx, a built-in like hey_jarvis, or a comma list)
   VOICE_THRESHOLD    0.5    higher = fewer false wakes, more misses
   VOICE_MIC          name fragment or index of the input device (default: first USB mic)
   VOICE_SPEAKER      auto (first USB speaker) | none | an ALSA device like plughw:2,0
@@ -75,7 +75,7 @@ class Config:
         env = load_env(env_path or os.environ.get('SENTINEL_ENV', '/opt/sentinel/backend/.env'))
         get = lambda k, d='': os.environ.get(k) or env.get(k) or d
         self.token = get('VOICE_TOKEN')
-        self.model = get('VOICE_WAKE_MODEL', 'hey_jarvis')
+        self.model = get('VOICE_WAKE_MODEL', 'alfred')
         self.threshold = float(get('VOICE_THRESHOLD', '0.5'))
         self.mic = get('VOICE_MIC')
         self.speaker = get('VOICE_SPEAKER', 'auto')
@@ -257,9 +257,33 @@ def http_reason(err):
 
 # ---------- main loop ----------
 
-def load_model(name):
+MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+
+
+def resolve_models(spec, models_dir=MODELS_DIR):
+    """'alfred,hey_jarvis' -> ['<voice>/models/alfred.onnx', 'hey_jarvis'].
+
+    A name with a file in voice/models (or a path to a file) is a custom model;
+    anything else is one of openWakeWord's built-ins, downloaded at install.
+    """
+    out = []
+    for name in (n.strip() for n in str(spec).split(',')):
+        if not name:
+            continue
+        local = os.path.join(models_dir, f'{name}.onnx')
+        out.append(name if os.path.isfile(name) else local if os.path.isfile(local) else name)
+    return out
+
+
+def wake_phrase(spec):
+    """What to tell a person to say: 'alfred' -> 'Alfred', 'hey_jarvis' -> 'Hey Jarvis'."""
+    first = str(spec).split(',')[0].strip()
+    return os.path.splitext(os.path.basename(first))[0].replace('_', ' ').title()
+
+
+def load_model(spec):
     from openwakeword.model import Model
-    return Model(wakeword_models=[name], inference_framework='onnx')
+    return Model(wakeword_models=resolve_models(spec), inference_framework='onnx')
 
 
 def score_of(prediction):
@@ -347,9 +371,12 @@ def say(api, speaker, text):
 
 def download(cfg):
     from openwakeword import utils
-    utils.download_models(model_names=[cfg.model])
+    builtin = [m for m in resolve_models(cfg.model) if not m.endswith('.onnx')]
+    # The shared feature models always download; builtin wake words only if asked for.
+    # (An empty list would mean "every built-in model".)
+    utils.download_models(model_names=builtin or ['none'])
     load_model(cfg.model)                       # proves the files + onnxruntime work
-    log(f'Wake word model "{cfg.model}" ready.')
+    log(f'Wake word "{wake_phrase(cfg.model)}" ready ({cfg.model}).')
 
 
 def levels(cfg, seconds=20):
@@ -361,7 +388,7 @@ def levels(cfg, seconds=20):
     mic = Mic(sd, cfg.mic)
     model = load_model(cfg.model)
     log(f'Using "{mic.name}" at {mic.rate} Hz. Speaker: {find_speaker(cfg.speaker) or "none"}')
-    log(f'Talk normally, then say "hey jarvis" from where you\'ll stand. Wake fires at {cfg.threshold}.')
+    log(f'Talk normally, then say "{wake_phrase(cfg.model)}" from where you\'ll stand. Wake fires at {cfg.threshold}.')
     peak, last = 0.0, 0.0
     end = time.time() + seconds
     with mic.stream:

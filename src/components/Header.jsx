@@ -126,7 +126,7 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
                                         <input type="checkbox" checked={voicePanel} onChange={toggleVoicePanel} className="mr-3 w-4 h-4" />
                                         <span className={`text-${theme}-300 text-sm`}>
                                             Pi mic replies here
-                                            <span className={`block text-[10px] text-${theme}-700`}>"Hey Jarvis" runs and speaks on this device</span>
+                                            <span className={`block text-[10px] text-${theme}-700`}>"Alfred, …" runs and speaks on this device</span>
                                         </span>
                                     </label>
                                 )}

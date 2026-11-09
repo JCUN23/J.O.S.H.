@@ -86,11 +86,20 @@ class HelpersTest(unittest.TestCase):
         try:
             os.environ['VOICE_MIC'] = 'Jabra'
             c = L.Config(f.name)
-            self.assertEqual((c.token, c.threshold, c.mic, c.model, c.speaker), ('abc123', 0.6, 'Jabra', 'hey_jarvis', 'auto'))
+            self.assertEqual((c.token, c.threshold, c.mic, c.model, c.speaker), ('abc123', 0.6, 'Jabra', 'alfred', 'auto'))
             self.assertEqual(L.load_env(f.name)['OTHER'], 'x=y')
         finally:
             os.unlink(f.name)
             del os.environ['VOICE_MIC']
+
+    def test_models_resolve_to_local_files_or_builtins(self):
+        with tempfile.TemporaryDirectory() as d:
+            open(os.path.join(d, 'alfred.onnx'), 'wb').close()
+            self.assertEqual(L.resolve_models('alfred, hey_jarvis', d), [os.path.join(d, 'alfred.onnx'), 'hey_jarvis'])
+        self.assertEqual(L.wake_phrase('alfred'), 'Alfred')
+        self.assertEqual(L.wake_phrase('hey_jarvis,alfred'), 'Hey Jarvis')
+        # the shipped model is where the default points
+        self.assertTrue(L.resolve_models('alfred')[0].endswith(os.path.join('models', 'alfred.onnx')))
 
     def test_speaker_setting(self):
         self.assertIsNone(L.find_speaker('none'))

@@ -1,11 +1,11 @@
 # Hands-free Sentinel: the Pi mic
 
-Say **"Hey Jarvis"**, then the command. A USB mic on the Pi hears it; the wall
+Say **"Alfred"**, then the command: "Alfred, turn off the lights." A USB mic on the Pi hears it; the wall
 panel (or the Pi itself) runs it.
 
 ```
  USB mic ─► Pi: sentinel-voice (voice/listener.py, systemd)
-              1. openWakeWord "hey jarvis": always on, on-device, tiny CPU
+              1. openWakeWord "Alfred": always on, on-device, tiny CPU
               2. on wake: record until you pause (1 s), max 10 s
               3. POST the WAV ───────────► backend routes/voice.js (same Pi)
                                            4. Groq Whisper speech-to-text
@@ -31,9 +31,9 @@ a Python venv in `/opt/sentinel/voice/.venv`, the wake word model, a
 ssh -t sentinel-pi 'sudo systemctl stop sentinel-voice; /opt/sentinel/voice/.venv/bin/python /opt/sentinel/voice/listener.py --levels; sudo systemctl start sentinel-voice'
 ```
 
-20 seconds of live loudness and wake score. Talk normally, then say "hey jarvis"
+20 seconds of live loudness and wake score. Talk normally, then say "Alfred"
 from where you'll actually stand. The wake score should jump past the threshold
-(0.5) for "hey jarvis" and stay low for everything else.
+(0.5) for "Alfred" and stay low for everything else.
 
 ## Day to day
 
@@ -57,9 +57,16 @@ panel open, replies play there (`VOICE_SPEAKER=auto` picks the first USB
 playback device). Without a speaker the command still runs; only the spoken
 reply is missing.
 
+## Wake word
+
+Default: **Alfred** (`voice/models/alfred.onnx`, MIT, from a community collection;
+see `voice/models/README.md` for its test scores). Leading with "Alfred" scores
+higher than "Hey Alfred". `VOICE_WAKE_MODEL=alfred,hey_jarvis` listens for both.
+
+To train your own: openWakeWord's `notebooks/automatic_model_training.ipynb` in
+Google Colab (free, about an hour, mostly waiting). Drop the `.onnx` into
+`voice/models/`, set `VOICE_WAKE_MODEL` to its name, deploy.
+
 ## Later
 
-- **Custom "Hey Sentinel" wake word:** openWakeWord's training notebook (Google
-  Colab, free, about an hour mostly waiting). Copy the `.onnx` to the Pi and set
-  `VOICE_WAKE_MODEL` to its path.
 - A wake chime on the panel.

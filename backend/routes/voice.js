@@ -13,7 +13,7 @@ const router = express.Router();
 
 const STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 // Spelling hints for Whisper: names it would otherwise mangle.
-const STT_PROMPT = 'Sentinel, Jarvis. Govee, Hue, Frame TV, Spotify, Game Day, Lions, Pistons, Michigan, Barça.';
+const STT_PROMPT = 'Alfred, Sentinel. Govee, Hue, Frame TV, Spotify, Game Day, Lions, Pistons, Michigan, Barça.';
 const LISTENER_STALE_MS = 150_000;   // heartbeats come every 60 s
 const SPEAKING_MAX_MS = 60_000;      // a panel that never says "done" can't mute the Pi for long
 
@@ -37,12 +37,12 @@ function fromPi(req, res, next) {
   next();
 }
 
-// Whisper hears "Hey Jarvis, lights off" when the command follows the wake word without a
+// Whisper hears "Alfred, lights off" when the command follows the wake word without a
 // pause, and invents short phrases from silence. Strip the first, drop the second.
 const JUNK = new Set(['', 'you', 'thank you', 'thanks', 'thanks for watching', 'bye', 'okay', 'hmm']);
 function cleanTranscript(text) {
   const t = String(text || '').trim()
-    .replace(/^(hey[\s,]+)?(jarvis|sentinel)\b[\s,.!?]*/i, '')
+    .replace(/^(hey[\s,]+)?(alfred|jarvis|sentinel)\b[\s,.!?]*/i, '')
     .trim();
   return JUNK.has(t.toLowerCase().replace(/[^a-z\s']/g, '').trim()) ? '' : t;
 }

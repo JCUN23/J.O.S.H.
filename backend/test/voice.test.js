@@ -58,6 +58,8 @@ test('cleanTranscript strips the wake phrase and drops Whisper silence junk', ()
   assert.equal(T.cleanTranscript(' Thank you. '), '');
   assert.equal(T.cleanTranscript('you'), '');
   assert.equal(T.cleanTranscript('Hey Jarvis.'), '');
+  assert.equal(T.cleanTranscript('Alfred, turn off the lights.'), 'turn off the lights.');
+  assert.equal(T.cleanTranscript('Hey Alfred, what games are on?'), 'what games are on?');
   assert.equal(T.cleanTranscript('play some jazz'), 'play some jazz');
 });
 
