@@ -22,9 +22,11 @@ export async function processCommand(input) {
         console.error('[Sentinel] request failed:', res.status, data.detail || data.error || '', data.model ? `(model: ${data.model})` : '');
         return { response: "My AI service isn't responding right now. Try again in a moment.", musicPlaying: false };
     }
-    const musicPlaying = (data.toolsExecuted || []).some((t) =>
-        t.tool === 'play_music' || (t.tool === 'control_spotify' && t.args?.action === 'play'));
-    return { response: data.response || 'Done.', musicPlaying };
+    const tools = data.toolsExecuted || [];
+    const musicPlaying = tools.some((t) => t.tool === 'play_music' || (t.tool === 'control_spotify' && ['play', 'more_like_this'].includes(t.args?.action)));
+    // "Show me the calendar", "dark mode", "lock the screen": the panel carries these out
+    const panelActions = tools.filter((t) => t.tool === 'control_panel').map((t) => t.args || {});
+    return { response: data.response || 'Done.', musicPlaying, panelActions };
 }
 
 const randomResponse = (list) => list[Math.floor(Math.random() * list.length)];

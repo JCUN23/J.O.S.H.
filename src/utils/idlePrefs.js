@@ -4,6 +4,7 @@ const KEY = 'idle_mode';
 export const IDLE_MINUTES = 3;
 export const WAKE_EVENT = 'sentinel:wake';     // dispatch to wake the panel (voice, alerts)
 export const ARRIVED_EVENT = 'sentinel:arrived';   // the idle screen saw Josh (camera or tap)
+export const IDLE_NOW_EVENT = 'sentinel:idle-now'; // "Alfred, go to sleep": show the idle screen now
 
 const isInstalledApp = () => {
     try { return window.matchMedia('(display-mode: standalone)').matches; } catch { return false; }

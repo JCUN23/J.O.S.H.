@@ -13,6 +13,7 @@ const SCOPES = [
     "user-read-email",
     "user-read-private",
     "user-library-read",
+    "user-library-modify",         // "Alfred, like this song"
     "user-read-recently-played",   // "Last played" card
     "streaming",                   // Web Playback SDK: the panel as a Spotify device
 ].join(" ");

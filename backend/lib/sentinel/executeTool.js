@@ -73,6 +73,79 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     }
   }
 
+  // ===== PRINTER CONTROL (pause/resume/stop; stop needs confirm) =====
+  if (toolName === 'printer_control') {
+    const bambu = require('../bambu');
+    const p = bambu.snapshot();
+    if (!p.configured) return 'No printer is set up.';
+    if (!p.active) return 'Nothing is printing right now.';
+    const job = `"${p.job || 'the print'}" at ${p.percent ?? '?'}%`;
+    if (args.action === 'stop' && !args.confirm) return `Stopping ${job} can't be undone. Ask Josh to confirm; call again with confirm: true only after he says yes.`;
+    const r = await bambu.command(args.action);
+    if (r.ok) return { pause: `Paused ${job}.`, resume: `Resumed ${job}.`, stop: `Stopped ${job}.` }[args.action];
+    if (r.why === 'no-change') return "The printer didn't accept that. Bambu printers only take control commands from other apps in Developer Mode (LAN-only mode, which turns off Bambu's cloud and the Handy app). Use the printer screen or Bambu Handy instead.";
+    return `Couldn't ${args.action} the print (${r.why}).`;
+  }
+
+  // ===== SEND TO PHONE =====
+  if (toolName === 'send_to_phone') {
+    if (!args.message) return 'What should I send?';
+    const r = await require('../notify').notify({ title: args.title || 'From Alfred', message: String(args.message).slice(0, 2000), category: 'alfred', priority: 3, tags: ['speech_balloon'] });
+    return r.sent ? 'Sent to your phone.' : `Couldn't send it (${r.reason}).`;
+  }
+
+  // ===== RULES / ACTIVITY / PRESENCE =====
+  if (toolName === 'list_rules') {
+    const rules = require('../rules');
+    const all = rules.list();
+    const fmt = (r) => `${r.name} (${rules.describeTrigger(r)})`;
+    const on = all.filter((r) => r.enabled), off = all.filter((r) => !r.enabled);
+    return `On: ${on.map(fmt).join('; ') || 'none'}. Off: ${off.map(fmt).join('; ') || 'none'}.`;
+  }
+  if (toolName === 'set_rule') {
+    const rules = require('../rules');
+    const words = String(args.name || '').toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+    const hits = rules.list().filter((r) => words.length && words.every((w) => `${r.name} ${r.id}`.toLowerCase().includes(w)));
+    if (!hits.length) return `No rule matches "${args.name}". Rules: ${rules.list().map((r) => r.name).join(', ')}.`;
+    if (hits.length > 1) return `Which one: ${hits.map((r) => r.name).join(', ')}?`;
+    const r = rules.setEnabled(hits[0].id, args.enabled !== false);
+    require('../activity').log({ source: 'voice', title: `Rule ${r.enabled ? 'on' : 'off'}: ${r.name}`, results: [`rule: ${r.enabled ? 'enabled' : 'disabled'}`] });
+    return `Turned ${r.enabled ? 'on' : 'off'} "${r.name}".`;
+  }
+  if (toolName === 'activity_summary') {
+    const all = require('../activity').list(50);
+    let since = Date.now() - (Number(args.hours) || 12) * 3600e3;
+    if (args.since_away) {
+      const left = all.find((e) => e.source === 'presence' && /left home/i.test(e.title));
+      if (left) since = Date.parse(left.at);
+    }
+    const hits = all.filter((e) => Date.parse(e.at) >= since && !/backend started/i.test(e.title)).slice(0, 12).reverse();
+    if (!hits.length) return 'Nothing happened in that time.';
+    const t = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return hits.map((e) => `${t(e.at)} ${e.title}${e.ok === false ? ' (had problems)' : ''}`).join('; ') + '.';
+  }
+  if (toolName === 'presence_status') {
+    const people = require('../presence').snapshot();
+    if (!people.length) return 'Presence is not set up.';
+    const t = (iso) => (iso ? new Date(iso).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'unknown');
+    return people.map((p) => `${p.name}: ${p.status}${p.since ? ` since ${t(p.since)}` : ''}`).join('; ') + '.';
+  }
+
+  // ===== CALENDAR EDITS =====
+  if (toolName === 'update_calendar_event') {
+    return require('../calendar').updateEvent({ match: args.match, date: args.date, newStart: args.new_start, newTitle: args.new_title, durationMinutes: args.duration_minutes });
+  }
+  if (toolName === 'delete_calendar_event') return require('../calendar').deleteEvent({ match: args.match, date: args.date, confirm: args.confirm === true });
+
+  // ===== THE PANEL ITSELF (applied by the panel from toolsExecuted) =====
+  if (toolName === 'control_panel') {
+    const t = String(args.target || '').toLowerCase();
+    return {
+      show: `Showing the ${t} widget on the panel.`, hide: `Hid the ${t} widget.`, theme: `Panel color set to ${t}.`,
+      mode: `Switched the panel to ${t} mode.`, lock: 'Locked the panel.', idle: 'Panel going to standby.',
+    }[args.action] || `I can't do "${args.action}" on the panel.`;
+  }
+
   // ===== WEB / MEMORY / CALENDAR WRITES =====
   if (toolName === 'web_search') return require('./webSearch').webSearch(args.query);
   if (toolName === 'remember_fact') return require('./longMemory').remember(args.fact);
@@ -288,6 +361,7 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     if (args.action === 'search_and_play') return executeTool('play_music', { query: args.value, device: args.device }, { spotifyToken });
     const spotify = require('../spotifyPlay');
     const H = { Authorization: `Bearer ${spotifyToken}` };
+    if (['now_playing', 'like', 'queue', 'more_like_this'].includes(args.action)) return spotifyExtra(args, H, spotify.BASE);
     let device = null;
     if (args.device) {
       const d = await spotify.pickDevice(args.device, H);
@@ -364,6 +438,47 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   if (toolName === 'get_calendar') return require('../calendar').answer(args.when);
 
   return `Unknown tool: ${toolName}`;
+}
+
+// "What's playing", "like this song", "add X to the queue", "more like this".
+// Spotify's recommendations API is closed to apps like this one, so "more like this"
+// shuffles the current artist.
+async function spotifyExtra(args, H, BASE) {
+  const cur = await axios.get(`${BASE}/me/player/currently-playing`, { headers: H, validateStatus: () => true });
+  const track = cur.status === 200 ? cur.data?.item : null;
+  try {
+    if (args.action === 'now_playing') {
+      if (!track) return 'Nothing is playing on Spotify right now.';
+      return `${cur.data.is_playing ? 'Playing' : 'Paused on'} "${track.name}" by ${track.artists.map((a) => a.name).join(', ')}, from ${track.album?.name}.`;
+    }
+    if (args.action === 'like') {
+      if (!track) return 'Nothing is playing to like.';
+      await axios.put(`${BASE}/me/tracks`, null, { headers: H, params: { ids: track.id } });
+      return `Saved "${track.name}" to your Liked Songs.`;
+    }
+    if (args.action === 'queue') {
+      if (!args.value) return 'What should I add to the queue?';
+      const { data } = await axios.get(`${BASE}/search`, { headers: H, params: { q: args.value, type: 'track', limit: 1 } });
+      const t = data.tracks?.items?.[0];
+      if (!t) return `Couldn't find "${args.value}" on Spotify.`;
+      await axios.post(`${BASE}/me/player/queue`, null, { headers: H, params: { uri: t.uri } });
+      return `Added "${t.name}" by ${t.artists[0].name} to the queue.`;
+    }
+    if (args.action === 'more_like_this') {
+      const artist = track?.artists?.[0];
+      if (!artist) return 'Nothing is playing to base it on.';
+      await axios.put(`${BASE}/me/player/play`, { context_uri: artist.uri || `spotify:artist:${artist.id}` }, { headers: H });
+      await axios.put(`${BASE}/me/player/shuffle`, null, { headers: H, params: { state: true } }).catch(() => {});
+      return `Playing more ${artist.name} on shuffle.`;
+    }
+  } catch (err) {
+    const st = err.response?.status;
+    const msg = err.response?.data?.error?.message || err.message;
+    if (args.action === 'like' && (st === 403 || /scope/i.test(msg))) return 'Liking songs needs one Spotify re-login (a new permission): Spotify widget, log out and back in.';
+    if (st === 404) return 'No active Spotify device.';
+    return `Spotify said no (${msg}).`;
+  }
+  return 'Unknown Spotify action.';
 }
 
 module.exports = { executeTool };

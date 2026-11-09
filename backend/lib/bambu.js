@@ -1,6 +1,8 @@
 // Bambu Lab printer (P2S, P1, X1, A1) over its local MQTT API: live state, progress, time
-// remaining, temps, and a push when a print finishes or fails. Read-only, so it works in
-// normal cloud mode: no LAN-only mode or developer mode, Bambu Handy keeps working.
+// remaining, temps, and a push when a print finishes or fails. Watching works in normal
+// cloud mode (Bambu Handy keeps working). Pause/resume/stop (command()) are only accepted
+// by printers in Developer Mode (LAN-only); otherwise the printer ignores them, and
+// command() says so after checking that the state never changed.
 //   BAMBU_HOST=10.0.0.x  BAMBU_SERIAL=<printer SN>  BAMBU_ACCESS_CODE=<LAN access code>
 // The printer speaks MQTT over TLS on 8883 (user "bblp") with a self-signed cert.
 // P-series printers send only changed fields, so reports are merged into one state.
@@ -17,6 +19,9 @@ const configured = () => { const c = cfg(); return Boolean(c.host && c.serial &&
 
 const s = { connected: false, error: null, print: {}, updatedAt: null, lastJob: null };
 let client = null;
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+const pushall = () => client?.connected && client.publish(`device/${cfg().serial}/request`,
+  JSON.stringify({ pushing: { sequence_id: String(Date.now()), command: 'pushall', version: 1, push_target: 1 } }));
 
 const duration = (min) => (min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min}m`);
 
@@ -38,6 +43,12 @@ function ingest(msg, now = Date.now()) {
 function announce(outcome) {
   const job = s.print.subtask_name || s.lastJob?.name || 'print';
   const took = s.lastJob?.startedAt ? ` after ${duration(Math.round((Date.now() - s.lastJob.startedAt) / 60000))}` : '';
+  const asked = s.stopRequested; s.stopRequested = false;     // stopped on purpose (command('stop'))
+  if (asked && outcome === 'failed') {
+    activity.log({ source: 'printer', title: `Print stopped: ${job}`, results: [`printer: stopped at ${s.print.mc_percent ?? '?'}% as asked`] });
+    s.lastJob = null;
+    return;
+  }
   const title = outcome === 'finished' ? `Print done: ${job}` : `Print failed: ${job}`;
   const detail = outcome === 'finished' ? `Finished${took}.` : `Stopped at ${s.print.mc_percent ?? '?'}%${took}. Check the printer.`;
   activity.log({ source: 'printer', title, results: [outcome === 'finished' ? `printer: ${detail}` : `error: ${detail}`] });
@@ -75,8 +86,6 @@ function start() {
     username: 'bblp', password: c.code, rejectUnauthorized: false,   // printer cert is self-signed
     reconnectPeriod: 15000, connectTimeout: 10000, clientId: `sentinel-${Math.random().toString(16).slice(2, 8)}`,
   });
-  const pushall = () => client.connected && client.publish(`device/${c.serial}/request`,
-    JSON.stringify({ pushing: { sequence_id: String(Date.now()), command: 'pushall', version: 1, push_target: 1 } }));
   client.on('connect', () => {
     s.connected = true; s.error = null;
     client.subscribe(`device/${c.serial}/report`, () => pushall());
@@ -95,7 +104,27 @@ function start() {
   return true;
 }
 
-const stop = () => new Promise((r) => (client ? client.end(true, {}, r) : r()));
-const _reset = () => { s.print = {}; s.lastJob = null; s.updatedAt = null; };
+// Pause / resume / stop the current print. Confirms by watching the printer's state
+// change; -> { ok, state } | { ok: false, why }.
+const WANT = { pause: ['PAUSE'], resume: ['RUNNING', 'PREPARE'], stop: ['FAILED', 'IDLE', 'FINISH'] };
+async function command(action, { timeoutMs = 10_000, pollMs = 500 } = {}) {
+  if (!WANT[action]) return { ok: false, why: `unknown action "${action}"` };
+  if (!client?.connected) return { ok: false, why: 'the printer is not connected' };
+  if (action === 'stop') s.stopRequested = true;
+  client.publish(`device/${cfg().serial}/request`, JSON.stringify({ print: { sequence_id: String(Date.now()), command: action, param: '' } }));
+  const end = Date.now() + timeoutMs;
+  let refreshed = false;
+  while (Date.now() < end) {
+    if (WANT[action].includes(s.print.gcode_state)) return { ok: true, state: s.print.gcode_state };
+    await delay(pollMs);
+    if (!refreshed && end - Date.now() < timeoutMs / 2) { refreshed = true; pushall(); }
+  }
+  if (action === 'stop') s.stopRequested = false;
+  return { ok: false, why: 'no-change' };
+}
 
-module.exports = { configured, start, stop, snapshot, ingest, announce, _reset };
+const stop = () => new Promise((r) => (client ? client.end(true, {}, r) : r()));
+const _reset = () => { s.print = {}; s.lastJob = null; s.updatedAt = null; s.stopRequested = false; };
+const _useClient = (c) => { client = c; };
+
+module.exports = { configured, start, stop, snapshot, ingest, announce, command, _reset, _useClient };

@@ -26,6 +26,12 @@ const INTENTS = [
   { re: /^(?:next|skip)(?: this| the)?(?: song| track)?$/, tool: 'control_spotify', args: () => ({ action: 'next' }) },
   { re: /^(?:previous|last|go back)(?: song| track)?$/, tool: 'control_spotify', args: () => ({ action: 'previous' }) },
   { re: /^what(?:'s| is) the time$|^what time is it$/, tool: 'get_time', args: () => ({}), say: (m, r) => `It's ${r}.` },
+  // The panel itself (applied by the panel from toolsExecuted)
+  { re: /^(?:show|open|go to|pull up|display)(?: me)?(?: the| my)? (weather|calendar|sports|scores|spotify|music|news|govee|hue|printer|scenes|activity|tv|frame tv|quick controls)(?: widget)?$/,
+    tool: 'control_panel', args: (m) => ({ action: 'show', target: { scores: 'sports', music: 'spotify', 'frame tv': 'tv', 'quick controls': 'quick_controls' }[m[1]] || m[1] }) },
+  { re: /^(?:switch to |go |use |turn on )?(dark|light) mode$/, tool: 'control_panel', args: (m) => ({ action: 'mode', target: m[1] }) },
+  { re: /^lock(?: the)? (?:screen|panel)$/, tool: 'control_panel', args: () => ({ action: 'lock' }) },
+  { re: /^(?:go to sleep|standby|go idle|screen off)$/, tool: 'control_panel', args: () => ({ action: 'idle' }) },
 ];
 
 // -> { response, toolsExecuted, quick: true } | null (not an instant command)

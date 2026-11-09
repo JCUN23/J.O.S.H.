@@ -55,12 +55,12 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "control_spotify",
-      description: "Control what's already playing on Spotify: resume, pause, skip, go back, set volume. Optionally on a named device (e.g. 'The Frame', which opens Spotify on the TV if needed). To start something new, use play_music.",
+      description: "Control what's playing on Spotify: resume, pause, skip, go back, volume; now_playing ('what's playing'), like (save to Liked Songs), queue (add a song: value = what), more_like_this (shuffles the current artist; Spotify doesn't offer recommendations to this app). Optionally on a named device ('The Frame'). To start something new, use play_music.",
       parameters: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["play", "pause", "next", "previous", "volume", "search_and_play"], description: "play = resume" },
-          value: { type: "string", description: "For volume: 0-100. For search_and_play: what to play" },
+          action: { type: "string", enum: ["play", "pause", "next", "previous", "volume", "search_and_play", "now_playing", "like", "queue", "more_like_this"], description: "play = resume" },
+          value: { type: "string", description: "For volume: 0-100. For search_and_play / queue: the song" },
           device: { type: "string", description: "Where, if Josh names a device (e.g. 'The Frame'). Omit for the active device." }
         },
         required: ["action"]
@@ -301,6 +301,99 @@ const SENTINEL_TOOLS = [
       name: "undo_calendar_event",
       description: "Remove the event you just added ('undo that', 'take that off the calendar').",
       parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "control_panel",
+      description: "Control the wall panel's display: show (scroll to and highlight a widget, unhiding it), hide a widget, theme color, light/dark mode, lock the screen, idle (standby clock). Unlocking is face-only: you can't unlock it.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["show", "hide", "theme", "mode", "lock", "idle"] },
+          target: { type: "string", description: "show/hide: weather, calendar, sports, spotify, news, govee, hue, printer, scenes, activity, tv, quick_controls. theme: cyan, yellow, mocha. mode: light, dark." }
+        },
+        required: ["action"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_to_phone",
+      description: "Push a message to Josh's phone ('send me that', 'text me the score', 'send me a note to buy milk'). For 'send me that', send what you just told him.",
+      parameters: { type: "object", properties: { message: { type: "string" }, title: { type: "string", description: "Short title (optional)" } }, required: ["message"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_rules",
+      description: "The home automation rules and whether each is on ('what rules are on').",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_rule",
+      description: "Turn an automation rule on or off by name ('turn off the sunset rule').",
+      parameters: { type: "object", properties: { name: { type: "string", description: "Words from the rule's name" }, enabled: { type: "boolean" } }, required: ["name", "enabled"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "activity_summary",
+      description: "What the house did recently: rules that ran, Game Day, prints, presence, failures. 'What happened while I was out' = since_away.",
+      parameters: { type: "object", properties: { hours: { type: "number", description: "Look back this many hours (default 12)" }, since_away: { type: "boolean", description: "Since Josh last left home" } } }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "presence_status",
+      description: "Who is home and since when ('is anyone home', 'when did I get home').",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_calendar_event",
+      description: "Change an existing calendar event: move it (new_start), rename it, or change its length. Finds it by words in its title within the next 30 days.",
+      parameters: {
+        type: "object",
+        properties: {
+          match: { type: "string", description: "Words from the event's title" },
+          date: { type: "string", description: "Its current day 'YYYY-MM-DD', if known (narrows the search)" },
+          new_start: { type: "string", description: "New local start 'YYYY-MM-DDTHH:MM' (keeps its length)" },
+          new_title: { type: "string" },
+          duration_minutes: { type: "number" }
+        },
+        required: ["match"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_calendar_event",
+      description: "Delete a calendar event. First call WITHOUT confirm to find it; tell Josh what you found and ask; only after he says yes, call again with confirm: true.",
+      parameters: {
+        type: "object",
+        properties: { match: { type: "string" }, date: { type: "string", description: "'YYYY-MM-DD' if known" }, confirm: { type: "boolean" } },
+        required: ["match"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "printer_control",
+      description: "Pause, resume or stop the current 3D print. stop can't be undone: first call without confirm, ask Josh, then call with confirm: true only after he says yes.",
+      parameters: { type: "object", properties: { action: { type: "string", enum: ["pause", "resume", "stop"] }, confirm: { type: "boolean" } }, required: ["action"] }
     }
   }
 ];

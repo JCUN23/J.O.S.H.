@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadFaceDetector } from '../utils/faceApiLoader';
-import { WAKE_EVENT, ARRIVED_EVENT } from '../utils/idlePrefs';
+import { WAKE_EVENT, ARRIVED_EVENT, IDLE_NOW_EVENT } from '../utils/idlePrefs';
 import IdleCave from './IdleCave';
 
 const TICKS = Array.from({ length: 60 }, (_, i) => i);
@@ -29,13 +29,16 @@ const IdleMode = ({ enabled, paused, minutes = 3, theme }) => {
         let timer;
         const arm = () => { clearTimeout(timer); timer = setTimeout(() => setIdle(true), minutes * 60000); };
         const onWake = () => { setIdle(false); arm(); };
+        const idleNow = () => { clearTimeout(timer); setTimeout(() => setIdle(true), 1500); };   // after Alfred's reply
         ACTIVITY_EVENTS.forEach((e) => window.addEventListener(e, arm, { passive: true }));
         window.addEventListener(WAKE_EVENT, onWake);
+        window.addEventListener(IDLE_NOW_EVENT, idleNow);
         arm();
         return () => {
             clearTimeout(timer);
             ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, arm));
             window.removeEventListener(WAKE_EVENT, onWake);
+            window.removeEventListener(IDLE_NOW_EVENT, idleNow);
         };
     }, [active, minutes]);
 

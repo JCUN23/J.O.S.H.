@@ -293,3 +293,10 @@ body { background: #020407; }
   .hud-root .hud-voice > :not(:first-child) { padding: 0.5rem 0.75rem; max-height: 5.5rem; overflow-y: auto; }
   .hud-root .hud-voice .text-lg { font-size: 1rem; line-height: 1.4; }
 }
+
+/* Alfred's "show me the ..." highlight */
+@keyframes hud-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--hud) / 0); }
+  25%, 60% { box-shadow: 0 0 0 3px rgb(var(--hud) / 0.9), 0 0 28px rgb(var(--hud) / 0.6); }
+}
+.hud-flash { animation: hud-flash 1.8s ease-in-out 1; border-radius: 0.5rem; }

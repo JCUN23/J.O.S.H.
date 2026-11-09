@@ -174,6 +174,7 @@ const DraggableGrid = ({ children, theme = 'cyan', editMode: editModeProp, onEdi
                         onDragOver={(e) => handleDragOver(e, index)}
                         onDragEnd={handleDragEnd}
                         style={{ '--i': index }}
+                        data-widget={key}
                         className={`
                             hud-panel rounded-lg lg:snap-start lg:min-h-0
                             ${editMode ? 'ring-2 ring-yellow-500/50 cursor-move' : ''}

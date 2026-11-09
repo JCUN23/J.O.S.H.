@@ -20,7 +20,7 @@ describe('processCommand', () => {
         expect(calls).toHaveLength(1);
         expect(calls[0].url).toBe('/api/sentinel/chat');
         expect(calls[0].body.message).toBe('turn off the lights');
-        expect(r).toEqual({ response: 'Lights off.', musicPlaying: false });
+        expect(r).toEqual({ response: 'Lights off.', musicPlaying: false, panelActions: [] });
     });
 
     it('flags music so the panel mic waits before listening again', async () => {
@@ -42,5 +42,13 @@ describe('allLights (Quick Controls)', () => {
         expect((await allLights(true, ['All lights on.'])).response).toMatch(/didn't respond: .*Neon Rope/);
         reply = { status: 200, body: { ok: true, failed: [] } };
         expect((await allLights(false, ['All lights off.'])).response).toBe('All lights off.');
+    });
+});
+
+describe('panel actions', () => {
+    it('control_panel results come back for the panel to apply', async () => {
+        reply = { status: 200, body: { response: 'Showing the calendar.', toolsExecuted: [{ tool: 'control_panel', args: { action: 'show', target: 'calendar' } }, { tool: 'get_time', args: {} }] } };
+        const r = await processCommand('show me the calendar');
+        expect(r.panelActions).toEqual([{ action: 'show', target: 'calendar' }]);
     });
 });

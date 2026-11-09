@@ -12,7 +12,7 @@ import ActivityWidget from './components/ActivityWidget';
 import FrameTvWidget from './components/FrameTvWidget';
 import IdleMode from './components/IdleMode';
 import { createUtterance, mergeSpeech } from './utils/utterance';
-import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT, ARRIVED_EVENT } from './utils/idlePrefs';
+import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT, ARRIVED_EVENT, IDLE_NOW_EVENT } from './utils/idlePrefs';
 import { getVoicePanel, setVoicePanel, connectPiVoice, reportSpeaking } from './utils/piVoice';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
@@ -324,6 +324,34 @@ const BatcomputerHub = () => {
     if (awaitingCommand || listening) window.dispatchEvent(new Event(WAKE_EVENT));
   }, [awaitingCommand, listening]);
 
+  // Alfred's control_panel actions ("show me the calendar", "dark mode", "lock the screen")
+  const PANEL_WIDGETS = { weather: ['weather', 'weather'], calendar: ['calendar', 'calendar'], sports: ['sports', 'sports'],
+    spotify: ['spotify', 'spotify'], news: ['news', 'news'], govee: ['govee', 'govee'], hue: ['phillips_hue', 'hue'],
+    printer: ['crealityprinter', 'printer'], scenes: ['scenes', 'scenes'], activity: ['activity', 'activity'],
+    tv: ['frametv', 'frametv'], quick_controls: ['quickcontrols', 'quickControls'] };
+  const applyPanelAction = ({ action, target } = {}) => {
+    const t = String(target || '').toLowerCase().replace(/\s+/g, '_');
+    if (action === 'show' || action === 'hide') {
+      const [gridKey, visKey] = PANEL_WIDGETS[t] || [];
+      if (!gridKey) return;
+      setWidgetVisibility((v) => ({ ...v, [visKey]: action === 'show' }));
+      if (action === 'show') {
+        // After it renders: scroll it into view and flash it
+        setTimeout(() => {
+          const el = document.querySelector(`[data-widget="${gridKey}"]`);
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          el.classList.remove('hud-flash'); void el.offsetWidth; el.classList.add('hud-flash');
+        }, 120);
+      }
+    } else if (action === 'theme' && ['cyan', 'yellow', 'mocha'].includes(t)) setTheme(t);
+    else if (action === 'mode' && (t === 'light' || t === 'dark') && t !== mode) toggleMode();
+    else if (action === 'lock' && getCachedFaces().length) setIsLocked(true);    // no faces = no way to unlock
+    else if (action === 'idle') window.dispatchEvent(new Event(IDLE_NOW_EVENT));
+  };
+  const applyPanelActionRef = useRef(applyPanelAction);
+  useEffect(() => { applyPanelActionRef.current = applyPanelAction; });
+
   const processVoiceCommand = useCallback(async (command) => {
     if (!command.trim()) return;
 
@@ -357,6 +385,7 @@ const BatcomputerHub = () => {
     try {
       // Process command locally (free, no API needed)
       const result = await processCommand(command, getGoogleCalendarEvents);
+      (result?.panelActions || []).forEach((a) => applyPanelActionRef.current(a));
       responseText = result?.response || result || '';
       musicPlaying = result?.musicPlaying || false;
       console.log('[Sentinel] Response:', responseText, musicPlaying ? '(music playing)' : '');
