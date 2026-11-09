@@ -55,6 +55,27 @@ test('sentinel chat (Groq)', async (t) => {
     assert.ok(second.some((m) => m.role === 'tool' && m.tool_call_id === 'c1'));
   });
 
+  await t.test('rate limit (429): long wait -> the smaller model answers instead (Nov 9 "AI unavailable")', async () => {
+    requests.length = 0;
+    const limited = httpError(429, { error: { message: 'Rate limit reached for model openai/gpt-oss-120b: tokens per minute' } });
+    limited.response.headers = { 'retry-after': '40' };
+    script = [limited, { finish_reason: 'stop', message: { role: 'assistant', content: 'Resumed on The Frame.' } }];
+    const r = await app.call('POST', '/api/sentinel/chat', { message: 'resume the music on the frame' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.response, 'Resumed on The Frame.');
+    assert.deepEqual(requests.map((q) => q.model), ['openai/gpt-oss-120b', 'openai/gpt-oss-20b']);
+  });
+
+  await t.test('rate limit with a short retry-after: waits and retries the same model', async () => {
+    requests.length = 0;
+    const limited = httpError(429, { error: { message: 'Rate limit reached' } });
+    limited.response.headers = { 'retry-after': '0.01' };
+    script = [limited, { finish_reason: 'stop', message: { role: 'assistant', content: 'OK.' } }];
+    const r = await app.call('POST', '/api/sentinel/chat', { message: 'hi' });
+    assert.equal(r.body.response, 'OK.');
+    assert.deepEqual(requests.map((q) => q.model), ['openai/gpt-oss-120b', 'openai/gpt-oss-120b']);
+  });
+
   await t.test('Groq rejection -> 502 with the reason (regression: silent "not sure how to help")', async () => {
     script = [httpError(404, { error: { message: 'The model `llama-3.3-70b-versatile` has been decommissioned' } })];
     const r = await app.call('POST', '/api/sentinel/chat', { message: 'hi' });

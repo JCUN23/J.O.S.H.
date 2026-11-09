@@ -10,6 +10,35 @@ const groqParams = () => ({
   ...(GROQ_REASONING_EFFORT ? { reasoning_effort: GROQ_REASONING_EFFORT } : {}),
 });
 
+// Groq's free tier allows 8K tokens/minute PER MODEL, and every loop step resends the
+// prompt + tool list (~2.4K tokens). Two commands close together can hit it (Nov 9:
+// "my AI service isn't responding"). On a 429: wait and retry if Groq says it's short,
+// else use the smaller model, which has its own budget.
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const FALLBACK_MODEL = () => process.env.GROQ_FALLBACK_MODEL ?? 'openai/gpt-oss-20b';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function groqPost(body) {
+  const post = (b) => axios.post(GROQ_URL, b, {
+    headers: { Authorization: `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+    timeout: 15000,
+  });
+  try {
+    return await post(body);
+  } catch (err) {
+    if (err.response?.status !== 429) throw err;
+    const wait = Number(err.response.headers?.['retry-after']);
+    if (wait > 0 && wait <= 6) {
+      console.log(`[Sentinel] Groq rate limit on ${body.model}; retrying in ${wait}s`);
+      await sleep(wait * 1000);
+      try { return await post(body); } catch (again) { if (again.response?.status !== 429) throw again; }
+    }
+    const fallback = FALLBACK_MODEL();
+    if (!fallback || fallback === body.model) throw err;
+    console.log(`[Sentinel] Groq rate limit on ${body.model}; using ${fallback}`);
+    return post({ ...body, model: fallback });
+  }
+}
+
 // Reasoning models attach extra fields (e.g. `reasoning`) to replies. Send back only
 // what the chat API accepts as conversation history.
 const historyMessage = (m) => ({
@@ -49,32 +78,13 @@ async function runSentinel(message, { spotifyToken } = {}) {
     // Groq returns tool_use_failed. We retry without tools so it just responds naturally.
     let choice;
     try {
-      const response = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          ...groqParams(),
-          messages,
-          tools: SENTINEL_TOOLS,
-          tool_choice: 'auto',
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${GROQ_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 15000 // 15s — don't let Groq hang forever
-        }
-      );
+      const response = await groqPost({ ...groqParams(), messages, tools: SENTINEL_TOOLS, tool_choice: 'auto' });
       choice = response.data.choices[0];
     } catch (groqErr) {
       // Llama tried to force a tool call and failed — retry without tools
       if (groqErr.response?.data?.error?.code === 'tool_use_failed') {
         console.log('[Sentinel] tool_use_failed — retrying without tools');
-        const fallback = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          { ...groqParams(), messages },
-          { headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 15000 }
-        );
+        const fallback = await groqPost({ ...groqParams(), messages });
         choice = fallback.data.choices[0];
       } else {
         throw groqErr; // Re-throw unexpected errors

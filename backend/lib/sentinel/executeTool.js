@@ -261,7 +261,45 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   }
 
   // ===== STUBS (not yet wired server-side) =====
-  if (toolName === 'control_spotify') return 'Use the play_music tool instead for music requests. For basic playback control (pause/skip), action noted: ' + args.action;
+  // ===== SPOTIFY PLAYBACK (pause / resume / skip / volume, optionally on a device) =====
+  if (toolName === 'control_spotify') {
+    if (!spotifyToken) return 'Spotify is not connected. Josh needs to log in on the dashboard first.';
+    if (args.action === 'search_and_play') return executeTool('play_music', { query: args.value, device: args.device }, { spotifyToken });
+    const spotify = require('../spotifyPlay');
+    const H = { Authorization: `Bearer ${spotifyToken}` };
+    let device = null;
+    if (args.device) {
+      const d = await spotify.pickDevice(args.device, H);
+      if (d.error) return d.error;
+      device = d.device;
+    }
+    const where = device ? ` on ${device.name}` : '';
+    const params = device ? { device_id: device.id } : {};
+    try {
+      if (args.action === 'play' && device) {
+        // Resuming on another device = move playback there; it keeps the song and position.
+        await axios.put(`${spotify.BASE}/me/player`, { device_ids: [device.id], play: true }, { headers: H });
+        return `Resumed${where}.`;
+      }
+      const calls = {
+        play: () => axios.put(`${spotify.BASE}/me/player/play`, {}, { headers: H, params }),
+        pause: () => axios.put(`${spotify.BASE}/me/player/pause`, null, { headers: H, params }),
+        next: () => axios.post(`${spotify.BASE}/me/player/next`, null, { headers: H, params }),
+        previous: () => axios.post(`${spotify.BASE}/me/player/previous`, null, { headers: H, params }),
+        volume: () => axios.put(`${spotify.BASE}/me/player/volume`, null,
+          { headers: H, params: { ...params, volume_percent: Math.max(0, Math.min(100, parseInt(args.value) || 50)) } }),
+      };
+      if (!calls[args.action]) return `Unknown playback action "${args.action}".`;
+      await calls[args.action]();
+      const said = { play: 'Resumed', pause: 'Paused', next: 'Skipped', previous: 'Went back', volume: `Volume ${parseInt(args.value) || 50}%` };
+      return `${said[args.action]}${where}.`;
+    } catch (err) {
+      const st = err.response?.status;
+      if (st === 404) return 'No active Spotify device. Say where, e.g. "on The Frame".';
+      if (st === 403) return `Spotify refused that (${err.response?.data?.error?.message || 'not allowed right now'}).`;
+      return `Spotify playback failed: ${err.response?.data?.error?.message || err.message}`;
+    }
+  }
   // ===== TV CONTROL (SmartThings → Samsung Frame TV) =====
   if (toolName === 'control_tv' && require('../frameTv').configured().length) {
     // Local network control (lib/frameTv.js): every configured Frame TV.

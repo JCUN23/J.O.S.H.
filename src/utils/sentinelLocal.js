@@ -168,9 +168,9 @@ const COMMANDS = [
     // Spotify - Play/Resume
     {
         patterns: [
-            /play (my )?(music|song|spotify|tunes)$/i,
-            /resume (my )?(music|spotify|playback)/i,
-            /start (the )?(music|spotify)/i
+            // Whole-command only: "resume the music on The Frame" names a device, so it
+            // goes to the AI (control_spotify with device) instead of the active device.
+            /^(play|resume|start) (the |my )?(music|song|spotify|tunes|playback)$/i
         ],
         handler: async () => {
             const result = await spotifyControl('play');

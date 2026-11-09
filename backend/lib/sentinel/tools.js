@@ -55,12 +55,13 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "control_spotify",
-      description: "Control Spotify music playback",
+      description: "Control what's already playing on Spotify: resume, pause, skip, go back, set volume. Optionally on a named device (e.g. 'The Frame', which opens Spotify on the TV if needed). To start something new, use play_music.",
       parameters: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["play", "pause", "next", "previous", "volume", "search_and_play"], description: "The action to perform" },
-          value: { type: "string", description: "For volume: number 0-100. For search_and_play: song name or 'song by artist'" }
+          action: { type: "string", enum: ["play", "pause", "next", "previous", "volume", "search_and_play"], description: "play = resume" },
+          value: { type: "string", description: "For volume: 0-100. For search_and_play: what to play" },
+          device: { type: "string", description: "Where, if Josh names a device (e.g. 'The Frame'). Omit for the active device." }
         },
         required: ["action"]
       }
