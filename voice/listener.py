@@ -122,6 +122,16 @@ class Endpointer:
         return 'more'
 
 
+def noise_floor(levels):
+    """The room's quiet level from the last few seconds of frame loudness.
+
+    A low percentile, not the median: the wake word itself is in this window, and
+    a median there measures your voice, not the room (Nov 8: "room 394" from a
+    room at ~80, so the speech bar sat above the speech).
+    """
+    return float(np.percentile(levels, 20)) if len(levels) else 0.0
+
+
 def rms(frame):
     return float(np.sqrt(np.mean(frame.astype(np.float32) ** 2))) if len(frame) else 0.0
 
@@ -277,7 +287,7 @@ def run(cfg):
             time.sleep(60)
     threading.Thread(target=heartbeat, daemon=True).start()
 
-    recent = deque(maxlen=12)                   # ~1 s of loudness: the room's noise floor
+    recent = deque(maxlen=62)                   # ~5 s of loudness: the room's noise floor
     cooldown_until = 0.0
     with mic.stream:
         while True:
@@ -288,12 +298,11 @@ def run(cfg):
                 continue
             log(f'Wake word ({score:.2f})')
             try:
-                handle_command(cfg, api, mic, speaker, float(np.median(recent)))
+                handle_command(cfg, api, mic, speaker, noise_floor(recent))
             except Exception as e:
                 log(f'Command failed: {http_reason(e)}')
             model.reset()                       # forget the wake word's audio
             mic.drain()                         # and everything heard while we were busy
-            recent.clear()
             cooldown_until = time.time() + 1.5
 
 

@@ -60,6 +60,20 @@ class EndpointerTest(unittest.TestCase):
         self.assertEqual((v, t), ('done', 4.0))
 
 
+class NoiseFloorTest(unittest.TestCase):
+    def test_the_wake_word_does_not_count_as_the_room(self):
+        # Nov 8: 4 s of room at ~80, then 1 s of "hey jarvis" at ~400 right before the wake
+        levels = [80] * 50 + [400] * 12
+        floor = L.noise_floor(levels)
+        self.assertLess(floor, 100)
+        # and the command after it (talking at 300-900) clears the bar
+        v, _ = run(L.Endpointer(floor), frames((0.3, 80), (1.2, 450), (1.5, 80)))
+        self.assertEqual(v, 'done')
+
+    def test_empty_window(self):
+        self.assertEqual(L.noise_floor([]), 0.0)
+
+
 class HelpersTest(unittest.TestCase):
     def test_wav_is_16k_mono_16bit(self):
         data = L.to_wav(np.zeros(1600, dtype=np.int16))
