@@ -1,5 +1,6 @@
 import { BACKEND_URL } from '../config';
 import { inferCapabilities } from './goveeCapabilities';
+import ColorStudio from './ColorStudio';
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
     Lightbulb,
@@ -128,15 +129,7 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
     };
     useEffect(() => () => clearTimeout(debounceRef.current), []);
 
-    const presetColors = [
-        [255, 0, 0],
-        [0, 255, 0],
-        [0, 0, 255],
-        [255, 255, 0],
-        [0, 255, 255],
-        [255, 0, 255],
-        [255, 255, 255],
-    ];
+
 
     if (loading) {
         return (
@@ -243,35 +236,12 @@ const GoveeWidget = ({ theme, setGoveeIsConnected }) => {
                         </div>
                     )}
 
-                    {/* COLORS */}
+                    {/* COLORS: any RGB. Sent on release only: Govee's cloud allows a handful
+                        of commands per device per minute, so no live preview while dragging. */}
                     {caps.color && (
-                        <>
-                            <input
-                                type="color"
-                                onChange={(e) => {
-                                    const c = e.target.value;
-                                    sendDebounced({
-                                        name: "color",
-                                        value: {
-                                            r: parseInt(c.slice(1, 3), 16),
-                                            g: parseInt(c.slice(3, 5), 16),
-                                            b: parseInt(c.slice(5, 7), 16),
-                                        },
-                                    });
-                                }}
-                                className="w-full h-10"
-                            />
-                            <div className="grid grid-cols-7 gap-2">
-                                {presetColors.map(([r, g, b], i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => setColor(r, g, b)}
-                                        style={{ backgroundColor: `rgb(${r},${g},${b})` }}
-                                        className="h-8 rounded"
-                                    />
-                                ))}
-                            </div>
-                        </>
+                        <ColorStudio theme={theme} disabled={sending || rateLimited}
+                            onCommit={({ r, g, b }) => setColor(r, g, b)}
+                            note="Sets when you let go (Govee's cloud only takes a few commands a minute)." />
                     )}
 
                     {/* TEMPERATURE */}

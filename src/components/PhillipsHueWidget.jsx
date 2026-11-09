@@ -1,5 +1,7 @@
 import { BACKEND_URL } from '../config';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import ColorStudio from './ColorStudio';
+import { rgbToXy } from '../utils/color';
 import { Lightbulb, Power, Loader2, RefreshCw, Palette, ChevronDown, ChevronUp, Sun } from 'lucide-react';
 
 const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
@@ -129,50 +131,30 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
         }
     };
 
-    const setColor = (hue, sat) => {
-        if (selectedLight) {
-            controlLight(selectedLight.id, { hue: parseInt(hue), sat: parseInt(sat) });
-        }
+    // Live color while dragging: straight to the bridge (local network, fast), at most
+    // every 150 ms, skipping the busy flag and reload. The release goes through
+    // controlLight. xy is Philips' own color space, so hex codes look right on the bulb.
+    const preview = useRef({ at: 0, timer: null, last: null });
+    const previewColor = (rgb) => {
+        if (!selectedLight) return;
+        const p = preview.current;
+        p.last = rgb;
+        const sendNow = () => {
+            p.at = Date.now(); p.timer = null;
+            fetch(`${BACKEND_URL}/api/hue/lights/${selectedLight.id}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: { on: true, xy: rgbToXy(p.last) } }),
+            }).catch(() => {});
+        };
+        const wait = 150 - (Date.now() - p.at);
+        if (wait <= 0) sendNow();
+        else if (!p.timer) p.timer = setTimeout(sendNow, wait);
     };
-
-    const handleColorPicker = (e) => {
-        const hex = e.target.value;
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-
-        // Convert RGB to Hue HSB
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        const delta = max - min;
-
-        let hue = 0;
-        if (delta !== 0) {
-            if (max === r) {
-                hue = ((g - b) / delta + (g < b ? 6 : 0)) / 6;
-            } else if (max === g) {
-                hue = ((b - r) / delta + 2) / 6;
-            } else {
-                hue = ((r - g) / delta + 4) / 6;
-            }
-        }
-
-        const sat = max === 0 ? 0 : delta / max;
-
-        setColor(Math.round(hue * 65535), Math.round(sat * 254));
+    const commitColor = (rgb) => {
+        clearTimeout(preview.current.timer); preview.current.timer = null;
+        if (selectedLight) controlLight(selectedLight.id, { on: true, xy: rgbToXy(rgb) });
     };
-
-    const presetColors = [
-        { name: 'Red', hue: 0, sat: 254 },
-        { name: 'Orange', hue: 5000, sat: 254 },
-        { name: 'Yellow', hue: 12750, sat: 254 },
-        { name: 'Green', hue: 25500, sat: 254 },
-        { name: 'Cyan', hue: 36210, sat: 254 },
-        { name: 'Blue', hue: 46920, sat: 254 },
-        { name: 'Purple', hue: 52428, sat: 254 },
-        { name: 'Pink', hue: 56100, sat: 254 },
-        { name: 'White', hue: 0, sat: 0 },
-    ];
+    useEffect(() => () => clearTimeout(preview.current.timer), []);
 
     if (loading) {
         return (
@@ -367,37 +349,9 @@ const PhilipsHueWidget = ({ theme, setHueIsConnected }) => {
                             {showColors ? <ChevronUp size={16} className={textClass} /> : <ChevronDown size={16} className={textClass} />}
                         </button>
                         {showColors && (
-                            <div className="p-3 pt-0 space-y-3">
-                                {/* Color Picker */}
-                                <div>
-                                    <div className={`text-xs text-${theme}-600 mb-2`}>Custom Color</div>
-                                    <input
-                                        type="color"
-                                        onChange={handleColorPicker}
-                                        className="h-12 w-full rounded cursor-pointer"
-                                        title="Pick any color"
-                                    />
-                                </div>
-
-                                {/* Preset Colors */}
-                                <div>
-                                    <div className={`text-xs text-${theme}-600 mb-2`}>Quick Presets</div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {presetColors.map(color => (
-                                            <button
-                                                key={color.name}
-                                                onClick={() => setColor(color.hue, color.sat)}
-                                                disabled={sending}
-                                                className={`h-12 rounded border-2 border-white/20 hover:border-white/60 transition-all ${sending ? 'opacity-50' : ''}`}
-                                                style={{
-                                                    backgroundColor: color.name === 'White' ? '#ffffff' :
-                                                        `hsl(${color.hue / 182}, ${color.sat / 2.54}%, 50%)`
-                                                }}
-                                                title={color.name}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
+                            <div className="p-3 pt-0">
+                                <ColorStudio theme={theme} disabled={sending} onPreview={previewColor} onCommit={commitColor}
+                                    note="Changes live while you drag." />
                             </div>
                         )}
                     </div>
