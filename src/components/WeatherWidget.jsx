@@ -58,7 +58,7 @@ const WeatherWidget = ({ theme }) => {
                 // Home location from the backend's .env: never hardcoded in the (public) repo
                 const locRes = await fetch(`${BACKEND_URL}/api/home/location`);
                 if (!locRes.ok) throw new Error('Home location not set (HOME_LAT/HOME_LON in backend/.env)');
-                const { lat, lon } = await locRes.json();
+                const { lat, lon, name: placeName } = await locRes.json();
 
                 const res = await fetch(
                     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,uv_index&hourly=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America/Detroit`
@@ -78,7 +78,7 @@ const WeatherWidget = ({ theme }) => {
                     low: Math.round(data.daily.temperature_2m_min[0]),
                     sunrise: data.daily.sunrise[0],
                     sunset: data.daily.sunset[0],
-                    location: "Washington, MI",
+                    location: placeName || "Home",
                 });
 
                 const nowIdx = data.hourly.time.findIndex(

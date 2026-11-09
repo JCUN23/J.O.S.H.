@@ -83,7 +83,7 @@ const ColorStudio = ({ theme, value, onPreview, onCommit, disabled, note }) => {
     const onKey = (e) => { if (e.key === 'Enter') e.currentTarget.blur(); };
 
     return (
-        <div className={`space-y-3 ${disabled ? 'opacity-60' : ''}`}>
+        <div data-testid="color-studio" className={`space-y-3 ${disabled ? 'opacity-60' : ''}`}>
             <div className="flex items-start gap-4 flex-wrap">
                 <div className="relative shrink-0 select-none" style={{ width: SIZE, height: SIZE, maxWidth: '100%', touchAction: 'none' }}>
                     <canvas ref={canvasRef} data-testid="color-wheel"

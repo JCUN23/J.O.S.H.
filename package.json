@@ -11,6 +11,7 @@
     "panel": "vite build && npm --prefix backend start",
     "deploy": "bash scripts/deploy.sh",
     "test": "vitest run",
+    "screenshots": "vite build && node scripts/screenshots.cjs dist docs/screenshots",
     "test:all": "vitest run && npm --prefix backend test"
   },
   "dependencies": {

@@ -13,6 +13,8 @@ Say *"Alfred, turn off the lights and play Discover Weekly on The Frame"* and it
 
 🎥 **[Video demo](https://www.linkedin.com/feed/update/urn:li:activity:7437486243988361216/)**
 
+![The J.O.S.H. wall panel: Alfred's briefing, a live Lions game, music on The Frame, timers](docs/screenshots/panel.png)
+
 | | |
 |---|---|
 | 🧠 **AI agent** | Tool-calling loop over **20 tools**: lights, TV, music, calendar, sports, timers, scenes, printer, weather |
@@ -40,6 +42,34 @@ Alfred is the voice of the system: an Alfred Pennyworth-style assistant that **a
 | "Open YouTube on the TV" | Local Frame TV control: power, art mode, apps, volume, playback |
 
 He also speaks up unprompted: a briefing the first time the panel sees me in the morning, a welcome when I get home, Game Day kickoffs, and finished 3D prints.
+
+---
+
+## Screenshots
+
+| Devices: lights, printer, TV, activity | Color studio | Idle "Batcave" screen |
+|---|---|---|
+| ![Devices](docs/screenshots/devices.png) | ![Color studio](docs/screenshots/color.png) | ![Idle screen](docs/screenshots/idle.png) |
+
+<sub>Rendered from the real app with sample data (`npm run screenshots`): no real devices, accounts, calendar or location.</sub>
+
+---
+
+## Hardware
+
+| Device | Role | How Sentinel talks to it |
+|---|---|---|
+| **Raspberry Pi 5** (2 GB, active cooler, HighPi Pro 5S case) | Always-on host for both services (`sentinel`, `sentinel-voice`) | systemd; served to the tailnet with Tailscale Serve (HTTPS) |
+| **Samsung Galaxy Tab S7+**, wall-mounted | The panel: installed PWA; front camera for face lock and wake-on-presence | HTTPS + Server-Sent Events |
+| **USB microphone** (UM02) on the Pi | Always-on ears for the "Alfred" wake word | ALSA → Python (sounddevice) |
+| **Samsung The Frame** TV (2024) | Game Day, apps, art mode, Spotify playback | Local WebSocket remote + art channel, REST, Wake-on-LAN, UPnP |
+| **Philips Hue Bridge** + two **Hue Go** lamps | Accent lighting, team colors, color studio | Local Hue REST API (CIE xy colors) |
+| **Govee** LED neon strips | Room lighting, team colors, album-art sync | Govee cloud API (rate-limited, sequenced) |
+| **Bambu Lab P2S** 3D printer | Print progress, spoken "print finished" | Local MQTT over TLS |
+| **Phone** on Tailscale | Presence: home / away, welcome-home briefing | `tailscale ping` path detection |
+| *Optional:* USB speaker on the Pi | Tablet-free mode: replies spoken by the Pi | `mpg123` |
+
+The Pi runs headless on Wi-Fi; everything is deployed from a laptop with one command.
 
 ---
 
@@ -185,6 +215,7 @@ A Python service on the Pi runs an on-device wake-word model and records until t
 │   │   ├── rules.js scenes.js gameDay.js timers.js briefing.js presence.js
 │   │   └── sports.js calendar.js spotifyPlay.js notify.js bambu.js
 │   └── test/                 node:test suites
+├── docs/screenshots/         README images (scripts/screenshots.cjs, sample data)
 ├── voice/                    Pi wake-word listener (Python) + wake-word model
 ├── deploy/ scripts/          systemd units, bootstrap, one-command deploy
 └── docs/                     Pi setup, voice pipeline
@@ -213,6 +244,12 @@ npm run deploy    # build, sync, install, restart, health-check (also installs t
 
 **Hands-free voice:** see [`docs/voice-on-pi.md`](docs/voice-on-pi.md).
 
+**Screenshots** (sample data, needs Playwright)
+
+```bash
+npm run screenshots                       # writes docs/screenshots/*.png
+```
+
 **Tests**
 
 ```bash
@@ -230,7 +267,6 @@ Configuration lives in `backend/.env` (see [`.env.example`](backend/.env.example
 - [ ] Custom-trained wake word, plus a speaker on the Pi for a fully tablet-free mode
 - [ ] Multi-room: more panels and TVs, each command routed to the nearest one
 - [ ] Calendar writes ("add dinner Friday at 7")
-- [ ] A clean demo mode with sample data for screenshots and contributors
 
 ---
 

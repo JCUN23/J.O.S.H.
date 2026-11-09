@@ -18,7 +18,7 @@ router.post('/api/briefing/arrived', async (req, res) => res.json(await require(
 router.get('/api/home/location', (req, res) => {
   const lat = Number(process.env.HOME_LAT), lon = Number(process.env.HOME_LON);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(404).json({ error: 'Set HOME_LAT and HOME_LON in backend/.env' });
-  res.json({ lat, lon });
+  res.json({ lat, lon, name: process.env.HOME_NAME || '' });   // HOME_NAME: label on the weather widget
 });
 
 router.get('/api/presence', (req, res) => {
