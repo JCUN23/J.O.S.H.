@@ -111,17 +111,22 @@ function hueState({ on, brightness, color, kelvin }) {
   return state;
 }
 
+// The bridge answers HTTP 200 with [{ error: { description } }] for failures
+// (unreachable bulb, bad user): read the body, don't trust the status.
+const hueErrors = (res) => (Array.isArray(res?.data) ? res.data : []).map((r) => r?.error?.description).filter(Boolean);
+
 async function hueApply({ on, brightness, color, colorFor, kelvin, lightIds }) {
   if (!HUE_BRIDGE_IP || !HUE_USERNAME) return 'Hue: not configured';
   const base = `http://${HUE_BRIDGE_IP}/api/${HUE_USERNAME}`;
   if (lightIds?.length) {
-    await Promise.all(lightIds.map((id, i) => axios.put(`${base}/lights/${id}/state`,
+    const replies = await Promise.all(lightIds.map((id, i) => axios.put(`${base}/lights/${id}/state`,
       hueState({ on, brightness, kelvin, color: colorFor ? colorFor(i) : color }))));
-    return `Hue: ${lightIds.length} lights set`;
+    const errs = [...new Set(replies.flatMap(hueErrors))];
+    return errs.length ? `Hue: failed: ${errs.join('; ')}` : `Hue: ${lightIds.length} lights set`;
   }
   const state = hueState({ on, brightness, color, kelvin });
-  await axios.put(`${base}/groups/0/action`, state);
-  return `Hue: all lights ${state.on ? 'set' : 'off'}`;
+  const errs = [...new Set(hueErrors(await axios.put(`${base}/groups/0/action`, state)))];
+  return errs.length ? `Hue: failed: ${errs.join('; ')}` : `Hue: all lights ${state.on ? 'set' : 'off'}`;
 }
 
 async function frameTvs() {

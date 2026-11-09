@@ -548,8 +548,12 @@ export async function processCommand(input, getCalendarEvents = null) {
 
     console.log('[Sentinel] Processing:', normalized);
 
+    // Several requests in one ("save this playlist and turn on the lights") go to the AI,
+    // which can do each part. A local shortcut would grab one phrase and drop the rest.
+    const compound = /\b(and|then|also|plus)\b/.test(normalized);
+
     // First, try device control patterns (fast, local)
-    for (const command of COMMANDS) {
+    for (const command of compound ? [] : COMMANDS) {
         for (const pattern of command.patterns) {
             const match = normalized.match(pattern);
             if (match) {

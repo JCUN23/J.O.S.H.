@@ -12,48 +12,27 @@ const gameDay = require('../gameDay');
 // The model never enters this function. It only sees what you return.
 async function executeTool(toolName, args, { spotifyToken } = {}) {
 
-  // ===== GOVEE LIGHTS =====
-  if (toolName === 'control_govee_lights') {
-    try {
-      const devicesRes = await axios.get(`${GOVEE_BASE_URL}/devices`, {
-        headers: { 'Govee-API-Key': GOVEE_API_KEY }
-      });
-      const devices = devicesRes.data?.data?.devices || [];
-      if (devices.length === 0) return 'No Govee devices found.';
-
-      // Filter to specific device if requested
-      let targets = args.device
-        ? devices.filter(d => d.deviceName.toLowerCase().includes(args.device.toLowerCase()))
-        : devices;
-      if (targets.length === 0) return `No Govee device matching "${args.device}" found.`;
-
-      // H6076 models are read-only (Govee API limitation) — only allow power toggle
-      if (args.action !== 'on' && args.action !== 'off') {
-        targets = targets.filter(d => !d.model?.toUpperCase().startsWith('H6076'));
-        if (targets.length === 0) return 'All matching Govee devices are read-only and do not support color/brightness control.';
-      }
-
-      let cmd;
-      if (args.action === 'on') cmd = { name: 'turn', value: 'on' };
-      else if (args.action === 'off') cmd = { name: 'turn', value: 'off' };
-      else if (args.action === 'brightness') cmd = { name: 'brightness', value: parseInt(args.value) || 50 };
-      else if (args.action === 'color') {
-        const rgb = parseColor(args.value);
-        if (!rgb) return `Unknown color "${args.value}".`;
-        cmd = { name: 'color', value: rgb };
-      }
-
-      await Promise.all(targets.map(d =>
-        axios.put(`${GOVEE_BASE_URL}/devices/control`, {
-          device: d.device, model: d.model, cmd
-        }, { headers: { 'Govee-API-Key': GOVEE_API_KEY, 'Content-Type': 'application/json' } })
-      ));
-
-      const names = targets.map(d => d.deviceName).join(', ');
-      return `Govee ${args.action} applied to: ${names}`;
-    } catch (err) {
-      return `Govee control failed: ${err.message}`;
-    }
+  // ===== ALL LIGHTS ("the lights") / GOVEE =====
+  // Both go through lib/devices: Govee commands one at a time with retries, power-only
+  // models skipped for color, failures named. (Nov 9: the old Govee code fired every
+  // command at once, ignored Govee's in-band errors, and said "applied" regardless.)
+  if (toolName === 'control_all_lights' || toolName === 'control_govee_lights') {
+    const devices = require('../devices');
+    const opts = {};
+    if (args.action === 'on') opts.on = true;
+    else if (args.action === 'off') opts.on = false;
+    else if (args.action === 'brightness') opts.brightness = Math.max(1, Math.min(100, parseInt(args.value) || 50));
+    else if (args.action === 'color') {
+      opts.color = parseColor(args.value);
+      if (!opts.color) return `Unknown color "${args.value}".`;
+    } else return `Unknown light action "${args.action}".`;
+    const only = args.device && !/^all$/i.test(args.device) ? args.device : undefined;
+    const steps = [devices.goveeApply({ ...opts, only })];
+    if (toolName === 'control_all_lights') steps.push(devices.hueApply(opts));
+    const results = (await Promise.allSettled(steps)).map((r) =>
+      r.status === 'fulfilled' ? r.value : `error: ${r.reason?.response?.data?.message || r.reason?.message}`);
+    const failed = results.some((r) => /fail|error|no lights matched|: 0\//i.test(r));
+    return `${results.join('. ')}.${failed ? ' Tell Josh exactly which lights failed; do not say it worked.' : ''}`;
   }
 
   // ===== HUE LIGHTS =====

@@ -7,6 +7,21 @@ const SENTINEL_TOOLS = [
   {
     type: "function",
     function: {
+      name: "control_all_lights",
+      description: "Control ALL the lights at once (every Govee and Hue light). Use this for 'the lights', 'all the lights', 'lights on/off' with no specific light named.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["on", "off", "color", "brightness"], description: "The action to perform" },
+          value: { type: "string", description: "For color: hex like #ff0000 or a name (red, blue, purple, warm...). For brightness: 1-100 (percent)" }
+        },
+        required: ["action"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "control_govee_lights",
       description: "Control Govee smart lights (light strips, rope lights, lamps) - turn on/off, change color, adjust brightness",
       parameters: {
