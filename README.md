@@ -9,7 +9,7 @@ Say *"Alfred, turn off the lights and play Discover Weekly on The Frame"* and it
 ![Express 5](https://img.shields.io/badge/Express-5-000000?logo=express)
 ![Raspberry Pi 5](https://img.shields.io/badge/Raspberry%20Pi-5-A22846?logo=raspberrypi&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-wake%20word-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-214%20passing-brightgreen)
 
 🎥 **[Video demo](https://www.linkedin.com/feed/update/urn:li:activity:7437486243988361216/)**
 
@@ -17,11 +17,11 @@ Say *"Alfred, turn off the lights and play Discover Weekly on The Frame"* and it
 
 | | |
 |---|---|
-| 🧠 **AI agent** | Tool-calling loop over **20 tools**: lights, TV, music, calendar, sports, timers, scenes, printer, weather |
+| 🧠 **AI agent** | Tool-calling loop over **26 tools**: lights, TV, music, calendar, sports, timers, live web search, long-term memory |
 | 🎙️ **Hands-free voice** | On-device wake word ("Alfred") on the Pi, cloud transcription, spoken replies |
 | 🏠 **Local-first control** | Samsung Frame TV and Philips Hue driven directly over the home network, no vendor cloud |
 | ⚙️ **Automation engine** | Scenes, rules (time, sunset, presence), Game Day mode, morning briefings |
-| 🧪 **199 automated tests** | Node (`node:test`), React (Vitest + Testing Library), Python (`unittest`) |
+| 🧪 **214 automated tests** | Node (`node:test`), React (Vitest + Testing Library), Python (`unittest`) |
 | 🚀 **One-command deploy** | Build → rsync → systemd on the Pi, health-checked, served over Tailscale HTTPS as a PWA |
 
 ---
@@ -40,8 +40,12 @@ Alfred is the voice of the system: an Alfred Pennyworth-style assistant that **a
 | "Set a 10 minute pasta timer" / "Remind me at 5 to call Mom" | Countdown chip on screen; announced out loud and pushed to my phone when due |
 | "Brief me" | Weather, today's calendar, games, and reminders in one short rundown |
 | "Open YouTube on the TV" | Local Frame TV control: power, art mode, apps, volume, playback |
+| "Who won the Michigan game?" | Live web answer via Groq's built-in browser search, read back in a couple of sentences |
+| "Remember I like the lights at 40% after 9" | Long-term memory: saved, and used in every answer from then on ("forget that" works too) |
+| "Add dinner Friday at 7" | Creates the Google Calendar event ("undo that" removes it) |
+| *(right after he answers)* "and make them warmer" | Follow-up listening: the Pi mic stays open a few seconds, no wake word needed |
 
-He also speaks up unprompted: a briefing the first time the panel sees me in the morning, a welcome when I get home, Game Day kickoffs, and finished 3D prints.
+He also speaks up unprompted: a briefing the first time the panel sees me in the morning, a welcome when I get home, live game alerts ("Touchdown Lions! Lions 21, Packers 10."), weather heads-ups ("rain starting around 4"), Game Day kickoffs, and finished 3D prints.
 
 ---
 
@@ -87,7 +91,7 @@ flowchart TB
         direction LR
         Voice["sentinel-voice<br/>Python · openWakeWord"]
         API["sentinel<br/>Node · Express 5"]
-        Agent["Agent loop<br/>20 tools · memory"]
+        Agent["Agent loop<br/>26 tools · memory"]
         Auto["Automations<br/>rules · Game Day · timers"]
         Voice -->|"command audio"| API
         API --- Agent
@@ -126,6 +130,9 @@ The interesting parts weren't the widgets. They were the problems behind them.
 **An agent you can trust with facts.**
 The LLM once listed three "games on today" that didn't exist. Sports, calendar, weather and news now come only from tools that return real, date-filtered data. The system prompt forbids stating anything that changes over time unless a tool returned it, and tools return explicit "don't guess" errors when a source is down. A whole-sentence matcher handles everyday commands with no LLM call at all, so it's faster, free and immune to rate limits.
 
+**Fitting 26 tools into a free tier.**
+Every tool definition rides along on every agent step: about 2.9K tokens, against Groq's 8K-tokens-per-minute free tier. A tool router sends only the groups a request needs, keyed on the new message *and* the previous one, so follow-ups like "make them blue" keep the light tools. Nothing matched means every tool, so no capability is ever unreachable. Everyday commands skip the model entirely.
+
 **Graceful degradation on free tiers.**
 Groq's free tier allows 8K tokens per minute per model, and a single agent step carries about 2.4K tokens of prompt and tools. On a 429, the backend honors a short `retry-after`; otherwise it fails over to a sibling model with its own budget, instead of telling the user "AI unavailable."
 
@@ -152,7 +159,7 @@ A Python service on the Pi runs an on-device wake-word model and records until t
 "Home" is decided by `tailscale ping`: a direct private-LAN path to my phone means I'm here. A grace period keeps a brief Wi-Fi drop from counting as leaving.
 
 **Tests that remember bugs.**
-199 automated tests, many named after the real failure they lock down: "Android repeated every word twice", "two panels open: the command runs on ONE", "Hacker News boilerplate is not shown as a summary".
+214 automated tests, many named after the real failure they lock down: "Android repeated every word twice", "two panels open: the command runs on ONE", "Hacker News boilerplate is not shown as a summary".
 
 ---
 
@@ -163,6 +170,8 @@ A Python service on the Pi runs an on-device wake-word model and records until t
 - Agent loop with tool calling, short-term memory, and instant commands
 - ElevenLabs voice, with units spoken naturally ("54 degrees", not "54 deg F")
 - Timers, reminders, briefings and spoken announcements
+- Live web answers, long-term memory, calendar event creation, follow-up listening
+- Proactive alerts: live game scores/halftime/finals, rain/snow/freeze heads-ups
 
 **Lights**
 - Govee strips and Philips Hue lamps through one reliable path
