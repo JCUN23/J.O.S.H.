@@ -429,9 +429,10 @@ const BatcomputerHub = () => {
       setAwaitingCommand(false);
       awaitingCommandRef.current = false;
     }
+    return { musicPlaying };
   }, [speak]);
 
-  // Pi mic (voice/listener.py): the Pi hears "Hey Jarvis" and the command, the backend
+  // Pi mic (voice/listener.py): the Pi hears "Alfred" and the command, the backend
   // transcribes it, and this panel runs it exactly like a spoken command and speaks the
   // reply. With no voice panel connected (locked, closed, asleep) the Pi runs it itself.
   const processVoiceCommandRef = useRef(processVoiceCommand);
@@ -467,9 +468,11 @@ const BatcomputerHub = () => {
       onTranscript: async (text) => {
         setListening(false); setTranscript(text);
         reportSpeaking(true);
-        try { await processVoiceCommandRef.current(text); } finally { reportSpeaking(false); }
+        let result;
+        try { result = await processVoiceCommandRef.current(text); } finally { reportSpeaking(false, { followup: !result?.musicPlaying }); }
       },
       onNothing: () => { setListening(false); setTranscript(''); setResponse("Didn't catch that."); },
+      onIdle: () => { setListening(false); setTranscript(''); },
       onError: (msg) => { setListening(false); setTranscript(''); setVoiceError(msg); },
       // Timers, reminders, briefings: say it (and show it) even if nobody asked just now
       onAnnounce: async (text) => {

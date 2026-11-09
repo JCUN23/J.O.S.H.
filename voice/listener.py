@@ -20,6 +20,7 @@ Settings come from /opt/sentinel/backend/.env (environment variables win):
   VOICE_MIC          name fragment or index of the input device (default: first USB mic)
   VOICE_SPEAKER      auto (first USB speaker) | none | an ALSA device like plughw:2,0
   VOICE_MIN_LEVEL    60     lowest loudness that counts as speech (quiet mics)
+  VOICE_FOLLOWUP_SECONDS 6  after Alfred answers, listen this long without the wake word (0 = off)
   VOICE_BACKEND      http://127.0.0.1:3001
 """
 import argparse
@@ -83,6 +84,8 @@ class Config:
         self.max_s = float(get('VOICE_MAX_SECONDS', '10'))
         self.end_silence = float(get('VOICE_END_SILENCE', '1.0'))
         self.min_level = float(get('VOICE_MIN_LEVEL', '60'))
+        self.followup_s = float(get('VOICE_FOLLOWUP_SECONDS', '6'))    # 0 = no follow-up listening
+        self.followups = int(get('VOICE_FOLLOWUPS', '3'))              # follow-ups in a row
 
 
 # ---------- end of speech ----------
@@ -236,11 +239,17 @@ class Backend:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read()
 
+    def get(self, path, timeout=5):
+        req = urllib.request.Request(self.cfg.backend + path, headers={'X-Voice-Token': self.cfg.token})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read() or b'{}')
+
     def post(self, path, body=None, timeout=10):
         return json.loads(self._req(path, json.dumps(body or {}).encode(), 'application/json', timeout) or b'{}')
 
-    def utterance(self, wav):
-        return json.loads(self._req('/api/voice/utterance', wav, 'audio/wav', 30) or b'{}')
+    def utterance(self, wav, followup=False):
+        path = '/api/voice/utterance' + ('?followup=1' if followup else '')
+        return json.loads(self._req(path, wav, 'audio/wav', 30) or b'{}')
 
     def tts(self, text):
         return self._req('/api/tts', json.dumps({'text': text}).encode(), 'application/json', 30)
@@ -330,33 +339,85 @@ def run(cfg):
             cooldown_until = time.time() + 1.5
 
 
-def handle_command(cfg, api, mic, speaker, noise):
-    r = api.post('/api/voice/wake', {})
-    if not r.get('listen'):
-        log(f'  ignored: {r.get("why", "backend said no")}')
-        return
-    ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s, min_level=cfg.min_level)
+def record(cfg, mic, noise, start_timeout=5.0):
+    """-> (verdict, frames): 'done' with the command's audio, or 'nothing'"""
+    ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s, start_timeout=start_timeout, min_level=cfg.min_level)
     frames = []
     while True:
         f = mic.frame()
         frames.append(f)
         verdict = ep.push(rms(f))
         if verdict != 'more':
-            break
-    if verdict == 'nothing':
-        log(f'  no command heard (room {noise:.0f}, needed {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f})')
-        api.utterance(b'')
-        return
+            return verdict, frames, ep
+
+
+def send(api, frames, speaker, followup=False):
+    """Post a recorded command; speak a Pi-handled reply. -> the backend's answer"""
     audio = np.concatenate(frames)
-    log(f'  room {noise:.0f}, speech threshold {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f}')
     t0 = time.time()
-    res = api.utterance(to_wav(audio))
+    res = api.utterance(to_wav(audio), followup=followup)
     log(f'  heard "{res.get("text", "")}" ({len(audio) / RATE:.1f}s audio, {time.time() - t0:.1f}s round trip) '
         f'-> {res.get("handledBy") or "nothing"}')
     if res.get('handledBy') == 'pi' and res.get('reply'):
         log(f'  reply: {res["reply"]}')
         if speaker:
             say(api, speaker, res['reply'])
+    return res
+
+
+def follow_up_allowed(res, status):
+    """After a command: listen again without the wake word? Not after nothing was heard,
+    and not when music just started (the mic would hear the song)."""
+    if not res.get('text') or not res.get('handledBy'):
+        return False
+    if res.get('handledBy') == 'pi':
+        return res.get('followup', True)
+    return bool(status.get('followup', True)) and not status.get('speaking')
+
+
+def wait_until_quiet(api, grace=1.2, timeout=60.0):
+    """The panel is speaking the reply: wait for it to finish. -> last voice status"""
+    time.sleep(grace)                       # the panel reports 'speaking' a beat after the command lands
+    end = time.time() + timeout
+    status = {}
+    while time.time() < end:
+        try:
+            status = api.get('/api/voice/status')
+        except Exception:
+            return {'speaking': False, 'followup': False}
+        if not status.get('speaking'):
+            return status
+        time.sleep(0.3)
+    return status
+
+
+def handle_command(cfg, api, mic, speaker, noise):
+    r = api.post('/api/voice/wake', {})
+    if not r.get('listen'):
+        log(f'  ignored: {r.get("why", "backend said no")}')
+        return
+    verdict, frames, ep = record(cfg, mic, noise)
+    if verdict == 'nothing':
+        log(f'  no command heard (room {noise:.0f}, needed {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f})')
+        api.utterance(b'')
+        return
+    log(f'  room {noise:.0f}, speech threshold {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f}')
+    res = send(api, frames, speaker)
+
+    # Follow-ups: after Alfred answers, keep listening a few seconds without the wake word
+    for _ in range(cfg.followups if cfg.followup_s > 0 else 0):
+        status = wait_until_quiet(api) if res.get('handledBy') == 'panel' else {}
+        if not follow_up_allowed(res, status):
+            return
+        mic.drain()                                         # nothing from while Alfred was talking
+        if not api.post('/api/voice/followup', {}).get('listen'):
+            return
+        log('  listening for a follow-up')
+        verdict, frames, _ = record(cfg, mic, noise, start_timeout=cfg.followup_s)
+        if verdict == 'nothing':
+            api.utterance(b'', followup=True)               # ends the panel's "listening" quietly
+            return
+        res = send(api, frames, speaker, followup=True)
 
 
 def say(api, speaker, text):

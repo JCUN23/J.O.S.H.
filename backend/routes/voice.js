@@ -23,6 +23,7 @@ const clients = new Set();           // { res, panel, at }
 let seq = 0;
 let listener = null;                 // last heartbeat from the Pi
 let speakingUntil = 0;
+let followupOk = true;               // false right after music started: the mic would hear the song
 
 const panelCount = () => [...clients].filter((c) => c.panel).length;
 const listenerInfo = () => (listener && Date.now() - listener.at < LISTENER_STALE_MS ? listener : null);
@@ -101,8 +102,10 @@ router.post('/api/voice/utterance', fromPi, express.raw({ type: () => true, limi
       return res.status(502).json({ error: err.message });
     }
   }
+  const followup = req.query.followup === '1';
   if (!text) {
-    broadcast({ type: 'nothing' });
+    // Silence after a follow-up window is normal: end it quietly, no "didn't catch that"
+    broadcast({ type: followup ? 'idle' : 'nothing' });
     return res.json({ text: '', handledBy: null });
   }
   console.log(`🎙️  Pi mic heard: "${text.slice(0, 200)}"`);
@@ -110,9 +113,10 @@ router.post('/api/voice/utterance', fromPi, express.raw({ type: () => true, limi
   // No panel open: run it here.
   try {
     const spotifyToken = await require('./spotify').getSpotifyAccessToken().catch(() => null);
-    const { response } = await agent(text, { spotifyToken });
+    const { response, toolsExecuted = [] } = await agent(text, { spotifyToken });
+    const music = toolsExecuted.some((t) => t.tool === 'play_music' || (t.tool === 'control_spotify' && t.args?.action === 'play'));
     broadcast({ type: 'handled', text, reply: response });
-    return res.json({ text, handledBy: 'pi', reply: response });
+    return res.json({ text, handledBy: 'pi', reply: response, followup: !music });
   } catch (err) {
     const detail = err.response?.data?.error?.message || err.message;
     console.warn(`🎙️  Sentinel failed on "${text}": ${detail}`);
@@ -125,11 +129,24 @@ router.post('/api/voice/utterance', fromPi, express.raw({ type: () => true, limi
 // The panel says it's talking (or done), so the Pi ignores wake words meanwhile.
 router.post('/api/voice/speaking', (req, res) => {
   speakingUntil = req.body?.speaking ? Date.now() + SPEAKING_MAX_MS : 0;
+  if (req.body?.speaking) followupOk = true;
+  else if (req.body?.followup === false) followupOk = false;
   res.json({ ok: true });
 });
 
+// Follow-up listening (the Pi, right after Alfred finished answering): show "listening"
+// on the panel. Not while he's still talking, and not after music started.
+router.post('/api/voice/followup', fromPi, (req, res) => {
+  if (process.env.VOICE_FOLLOWUP === 'off') return res.json({ listen: false, why: 'follow-ups off' });
+  if (Date.now() < speakingUntil) return res.json({ listen: false, why: 'panel is speaking' });
+  if (!followupOk) return res.json({ listen: false, why: 'music is playing' });
+  broadcast({ type: 'wake', followup: true });
+  res.json({ listen: true });
+});
+
 router.get('/api/voice/status', (req, res) => {
-  res.json({ listener: listenerInfo(), panels: panelCount(), configured: Boolean(process.env.VOICE_TOKEN) });
+  res.json({ listener: listenerInfo(), panels: panelCount(), configured: Boolean(process.env.VOICE_TOKEN),
+    speaking: Date.now() < speakingUntil, followup: followupOk && process.env.VOICE_FOLLOWUP !== 'off' });
 });
 
 // Server-Sent Events. ?panel=1 = this device runs what the Pi hears.
@@ -151,6 +168,6 @@ router._test = {
   cleanTranscript,
   setFetch: (f) => { fetchImpl = f; },
   setAgent: (f) => { agent = f; },
-  reset: () => { listener = null; speakingUntil = 0; for (const c of clients) c.res.end(); clients.clear(); },
+  reset: () => { listener = null; speakingUntil = 0; followupOk = true; for (const c of clients) c.res.end(); clients.clear(); },
 };
 module.exports = router;

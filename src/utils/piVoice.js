@@ -28,7 +28,7 @@ export function setVoicePanel(on) {
 //   nothing    -> heard the wake word, then no words
 //   error      -> speech-to-text failed
 //   announce   -> something for Alfred to say (timer done, reminder, briefing)
-export function connectPiVoice({ onWake, onTranscript, onNothing, onError, onAnnounce } = {}) {
+export function connectPiVoice({ onWake, onTranscript, onNothing, onError, onAnnounce, onIdle } = {}) {
     if (typeof EventSource === 'undefined') return () => {};
     const es = new EventSource(`${BACKEND_URL}/api/voice/events?panel=1`);
     const done = new Set();                                  // command ids already run
@@ -39,6 +39,7 @@ export function connectPiVoice({ onWake, onTranscript, onNothing, onError, onAnn
         if (ev.type === 'wake') onWake?.();
         else if (ev.type === 'transcript' && ev.text) onTranscript?.(ev.text);
         else if (ev.type === 'nothing') onNothing?.();
+        else if (ev.type === 'idle') onIdle?.();                     // follow-up window ended in silence
         else if (ev.type === 'error') onError?.(ev.text || 'Pi mic error');
         else if (ev.type === 'announce' && ev.text) onAnnounce?.(ev.text);   // timers, reminders, briefings
     };
@@ -46,9 +47,10 @@ export function connectPiVoice({ onWake, onTranscript, onNothing, onError, onAnn
 }
 
 // While Sentinel talks, the Pi ignores wake words (its own voice must not wake it).
-export const reportSpeaking = (speaking) =>
+// followup: false = don't open a follow-up listening window (music just started).
+export const reportSpeaking = (speaking, { followup } = {}) =>
     fetch(`${BACKEND_URL}/api/voice/speaking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ speaking }),
+        body: JSON.stringify(followup === undefined ? { speaking } : { speaking, followup }),
     }).catch(() => {});

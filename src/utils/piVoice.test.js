@@ -58,4 +58,12 @@ describe('piVoice', () => {
         FakeEventSource.last.emit({ type: 'announce', text: 'Your pasta timer finished.', id: 3 });
         expect(onAnnounce).toHaveBeenCalledWith('Your pasta timer finished.');
     });
+
+    it('a silent follow-up window ends as idle', () => {
+        const onIdle = vi.fn(); const onNothing = vi.fn();
+        connectPiVoice({ onIdle, onNothing });
+        FakeEventSource.last.emit({ type: 'idle' });
+        expect(onIdle).toHaveBeenCalledTimes(1);
+        expect(onNothing).not.toHaveBeenCalled();
+    });
 });

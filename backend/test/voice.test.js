@@ -109,7 +109,7 @@ test('no panel open: Sentinel runs it here and the reply goes back to the Pi', a
   const viewer = await stream(app.base, false);
   t.after(async () => { viewer.close(); T.reset(); await app.close(); });    // a laptop tab, not the voice panel
   const r = await postWav(app.base, WAV);
-  assert.deepEqual(r.body, { text: 'lights off', handledBy: 'pi', reply: 'Lights are off.' });
+  assert.deepEqual(r.body, { text: 'lights off', handledBy: 'pi', reply: 'Lights are off.', followup: true });
   assert.equal(ran, 'lights off');
   assert.equal((await viewer.waitFor('handled')).reply, 'Lights are off.');
 });
@@ -145,4 +145,33 @@ test('two panels open: the command runs on ONE (the newest), not both (Nov 9 dou
   assert.ok(ev.id > 0, 'commands carry an id');
   await new Promise((r2) => setTimeout(r2, 30));
   assert.equal(older.events.filter((e) => e.type === 'transcript').length, 0);
+});
+
+test('follow-up listening: allowed after Alfred finishes talking, not after music, silence ends it quietly', async (t) => {
+  const restore = quiet(); t.after(restore);
+  T.reset();
+  const app = await startApp(voice);
+  const panel = await stream(app.base, true);
+  t.after(async () => { panel.close(); T.reset(); await app.close(); });
+  const pi = { 'X-Voice-Token': 'vt' };
+
+  await app.call('POST', '/api/voice/speaking', { speaking: true });
+  assert.equal((await app.call('GET', '/api/voice/status')).body.speaking, true);
+  assert.deepEqual((await app.call('POST', '/api/voice/followup', {}, pi)).body, { listen: false, why: 'panel is speaking' });
+
+  await app.call('POST', '/api/voice/speaking', { speaking: false });
+  assert.deepEqual((await app.call('POST', '/api/voice/followup', {}, pi)).body, { listen: true });
+  assert.equal((await panel.waitFor('wake')).followup, true);
+
+  // silence in the follow-up window: 'idle' (no "didn't catch that")
+  const r = await fetch(`${app.base}/api/voice/utterance?followup=1`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', ...pi }, body: Buffer.alloc(0) });
+  assert.equal(r.status, 200);
+  await panel.waitFor('idle');
+  assert.equal(panel.events.filter((e) => e.type === 'nothing').length, 0);
+
+  // music just started: no follow-up window (the mic would hear the song)
+  await app.call('POST', '/api/voice/speaking', { speaking: true });
+  await app.call('POST', '/api/voice/speaking', { speaking: false, followup: false });
+  assert.deepEqual((await app.call('POST', '/api/voice/followup', {}, pi)).body, { listen: false, why: 'music is playing' });
+  assert.equal((await app.call('GET', '/api/voice/status')).body.followup, false);
 });

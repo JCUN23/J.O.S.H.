@@ -108,3 +108,20 @@ class HelpersTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class FollowUpTest(unittest.TestCase):
+    def test_follow_up_only_after_a_real_answer_and_never_after_music(self):
+        heard = {'text': 'turn on the lights', 'handledBy': 'panel'}
+        self.assertTrue(L.follow_up_allowed(heard, {'speaking': False, 'followup': True}))
+        self.assertFalse(L.follow_up_allowed(heard, {'speaking': False, 'followup': False}), 'music started')
+        self.assertFalse(L.follow_up_allowed(heard, {'speaking': True, 'followup': True}), 'still talking')
+        self.assertFalse(L.follow_up_allowed({'text': '', 'handledBy': None}, {}), 'nothing heard')
+        self.assertTrue(L.follow_up_allowed({'text': 'x', 'handledBy': 'pi', 'followup': True}, {}))
+        self.assertFalse(L.follow_up_allowed({'text': 'play jazz', 'handledBy': 'pi', 'followup': False}, {}))
+
+    def test_follow_up_window_is_shorter_to_start(self):
+        # nobody speaks within the follow-up window -> nothing, after ~start_timeout
+        v, t = run(L.Endpointer(60, start_timeout=6.0), frames((10, 50)))
+        self.assertEqual(v, 'nothing')
+        self.assertAlmostEqual(t, 6.0, delta=0.1)
