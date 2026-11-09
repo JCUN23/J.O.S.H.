@@ -41,4 +41,14 @@ describe('piVoice', () => {
         stop();
         expect(es.closed).toBe(true);
     });
+
+    it('a command id seen twice runs once', () => {
+        const onTranscript = vi.fn();
+        connectPiVoice({ onTranscript });
+        const es = FakeEventSource.last;
+        es.emit({ type: 'transcript', text: 'play discover weekly', id: 7 });
+        es.emit({ type: 'transcript', text: 'play discover weekly', id: 7 });
+        es.emit({ type: 'transcript', text: 'pause', id: 8 });
+        expect(onTranscript.mock.calls.map((c) => c[0])).toEqual(['play discover weekly', 'pause']);
+    });
 });

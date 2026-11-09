@@ -19,7 +19,8 @@ const SPEAKING_MAX_MS = 60_000;      // a panel that never says "done" can't mut
 
 let fetchImpl = (...a) => fetch(...a);
 let agent = (text, opts) => require('./sentinel').runSentinel(text, opts);
-const clients = new Set();           // { res, panel }
+const clients = new Set();           // { res, panel, at }
+let seq = 0;
 let listener = null;                 // last heartbeat from the Pi
 let speakingUntil = 0;
 
@@ -28,6 +29,15 @@ const listenerInfo = () => (listener && Date.now() - listener.at < LISTENER_STAL
 function broadcast(event) {
   const line = `data: ${JSON.stringify(event)}\n\n`;
   for (const c of clients) c.res.write(line);
+}
+// A command runs on exactly ONE panel: the most recently connected voice panel. Sending
+// it to every panel ran it once per open connection (a second tab, or a stale connection
+// from before the tablet slept): two plays, two replies (Nov 9).
+function sendToOnePanel(event) {
+  const panels = [...clients].filter((c) => c.panel).sort((a, b) => b.at - a.at);
+  if (!panels.length) return false;
+  panels[0].res.write(`data: ${JSON.stringify({ ...event, id: ++seq })}\n\n`);
+  return true;
 }
 
 function fromPi(req, res, next) {
@@ -96,10 +106,7 @@ router.post('/api/voice/utterance', fromPi, express.raw({ type: () => true, limi
     return res.json({ text: '', handledBy: null });
   }
   console.log(`🎙️  Pi mic heard: "${text.slice(0, 200)}"`);
-  if (panelCount()) {
-    broadcast({ type: 'transcript', text });
-    return res.json({ text, handledBy: 'panel' });
-  }
+  if (sendToOnePanel({ type: 'transcript', text })) return res.json({ text, handledBy: 'panel' });
   // No panel open: run it here.
   try {
     const spotifyToken = await require('./spotify').getSpotifyAccessToken().catch(() => null);
@@ -129,7 +136,7 @@ router.get('/api/voice/status', (req, res) => {
 router.get('/api/voice/events', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
-  const client = { res, panel: req.query.panel === '1' };
+  const client = { res, panel: req.query.panel === '1', at: Date.now() };
   clients.add(client);
   res.write(`retry: 3000\n\ndata: ${JSON.stringify({ type: 'hello', listener: Boolean(listenerInfo()) })}\n\n`);
   const ping = setInterval(() => res.write(': ping\n\n'), 25_000);

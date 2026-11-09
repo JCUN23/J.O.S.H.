@@ -19,3 +19,18 @@ describe('isWakeEcho (regression: tablet answered before the user spoke)', () =>
     expect(isWakeEcho('sentinel hello', 'sentinel hello', wokeAt, wokeAt + 5000)).toBe(false);
   });
 });
+
+import { extractCommand } from './wakeWord';
+describe('extractCommand: "Alfred" (and still "Sentinel")', () => {
+    it('returns the command after the wake word', () => {
+        expect(extractCommand('Alfred, turn off the lights')).toBe('turn off the lights');
+        expect(extractCommand('hey alfred what games are on')).toBe('what games are on');
+        expect(extractCommand('sentinel pause the music')).toBe('pause the music');
+    });
+    it('wake word alone -> null (command comes next); none -> false', () => {
+        expect(extractCommand('Alfred')).toBeNull();
+        expect(extractCommand('hey Alfred.')).toBeNull();
+        expect(extractCommand('we had fettuccine alfredo')).toBe(false);
+        expect(extractCommand('turn off the lights')).toBe(false);
+    });
+});

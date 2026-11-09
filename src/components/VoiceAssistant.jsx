@@ -35,7 +35,7 @@ const VoiceAssistant = ({
                 };
             }
             return {
-                text: 'SAY "SENTINEL"',
+                text: 'SAY "ALFRED"',
                 icon: <Mic size={20} />,
                 className: `bg-${theme}-700/50 hover:bg-${theme}-600 text-white`
             };
@@ -74,7 +74,7 @@ const VoiceAssistant = ({
     const wakeWordText = wakeWordActive
         ? awaitingCommand
             ? 'AWAITING COMMAND'
-            : 'LISTENING FOR "SENTINEL"'
+            : 'LISTENING FOR "ALFRED"'
         : 'WAKE WORD INACTIVE';
 
     return (
@@ -145,7 +145,7 @@ const VoiceAssistant = ({
             {!transcript && !response && (
                 <div className={`text-center text-${theme}-700 text-sm lg:hidden`}>
                     {wakeWordEnabled ? (
-                        <>Say <span className="font-bold">"Sentinel"</span> followed by your command, or click the mic button to speak directly.</>
+                        <>Say <span className="font-bold">"Alfred"</span> followed by your command, or click the mic button to speak directly.</>
                     ) : (
                         <>Click ACTIVATE and speak your command. I'll respond automatically after you finish speaking.</>
                     )}

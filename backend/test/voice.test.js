@@ -129,3 +129,20 @@ test('silence or junk -> nothing; speech-to-text failure -> 502 + error event', 
   assert.equal(r.status, 502);
   assert.match((await panel.waitFor('error')).text, /rate limited/);
 });
+
+test('two panels open: the command runs on ONE (the newest), not both (Nov 9 double reply)', async (t) => {
+  const restore = quiet(); t.after(restore);
+  T.reset(); sttText = 'Alfred, play Discover Weekly';
+  const app = await startApp(voice);
+  const older = await stream(app.base, true);
+  await new Promise((r) => setTimeout(r, 5));
+  const newer = await stream(app.base, true);
+  t.after(async () => { older.close(); newer.close(); T.reset(); await app.close(); });
+  const r = await postWav(app.base, WAV);
+  assert.equal(r.body.handledBy, 'panel');
+  const ev = await newer.waitFor('transcript');
+  assert.equal(ev.text, 'play Discover Weekly');
+  assert.ok(ev.id > 0, 'commands carry an id');
+  await new Promise((r2) => setTimeout(r2, 30));
+  assert.equal(older.events.filter((e) => e.type === 'transcript').length, 0);
+});

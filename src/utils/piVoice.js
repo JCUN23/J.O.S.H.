@@ -30,9 +30,11 @@ export function setVoicePanel(on) {
 export function connectPiVoice({ onWake, onTranscript, onNothing, onError } = {}) {
     if (typeof EventSource === 'undefined') return () => {};
     const es = new EventSource(`${BACKEND_URL}/api/voice/events?panel=1`);
+    const done = new Set();                                  // command ids already run
     es.onmessage = (e) => {
         let ev;
         try { ev = JSON.parse(e.data); } catch { return; }
+        if (ev.id != null) { if (done.has(ev.id)) return; done.add(ev.id); }
         if (ev.type === 'wake') onWake?.();
         else if (ev.type === 'transcript' && ev.text) onTranscript?.(ev.text);
         else if (ev.type === 'nothing') onNothing?.();

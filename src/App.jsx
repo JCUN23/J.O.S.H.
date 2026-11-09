@@ -21,7 +21,7 @@ import NewsWidget from './components/NewsWidget';
 import { exchangeCodeForToken } from "./components/Spotify/spotifyAuth";
 import { startSpotifyAuth, startSpotifyTokenSync } from "./components/Spotify/spotifyAuth";
 import { migrateLegacyTokens } from "./utils/authApi";
-import { isWakeEcho } from "./utils/wakeWord";
+import { isWakeEcho, extractCommand } from "./utils/wakeWord";
 import { getCachedFaces, syncFaces, FACES_CHANGED } from "./utils/faceStore";
 import { ProfileProvider } from './components/AuthAndProfiles/ProfileContext';
 import { useProfile } from './components/AuthAndProfiles/ProfileContext';
@@ -470,30 +470,6 @@ const BatcomputerHub = () => {
   }, [processVoiceCommand]);
   useEffect(() => { finishUtteranceRef.current = finishUtterance; }, [finishUtterance]);
 
-  // Extract command after wake word
-  const extractCommand = useCallback((text) => {
-    const lower = text.toLowerCase();
-    // Look for "sentinel" and extract everything after it
-    const wakeWordPatterns = [
-      /\bsentinel[,.]?\s+(.+)/i,
-      /\bhey sentinel[,.]?\s+(.+)/i,
-      /\bok sentinel[,.]?\s+(.+)/i,
-    ];
-
-    for (const pattern of wakeWordPatterns) {
-      const match = lower.match(pattern);
-      if (match && match[1]) {
-        return match[1].trim();
-      }
-    }
-
-    // Check if it just contains the wake word (command will come next)
-    if (/\b(hey |ok )?sentinel\b/i.test(lower)) {
-      return null; // Wake word detected but no command yet
-    }
-
-    return false; // No wake word found
-  }, []);
 
   // Track if audio has been unlocked by user interaction
   const audioUnlockedRef = useRef(false);
@@ -731,7 +707,7 @@ const BatcomputerHub = () => {
     };
 
     return instance;
-  }, [extractCommand, playWakeSound, utterance]);
+  }, [playWakeSound, utterance]);
 
   // Start wake word listening
   const startWakeWordListening = useCallback(() => {
