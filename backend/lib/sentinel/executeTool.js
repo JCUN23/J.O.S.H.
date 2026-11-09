@@ -122,7 +122,8 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
       else if (code <= 77) condition = 'snowy';
       else if (code <= 82) condition = 'rainy';
       else condition = 'stormy';
-      return `Currently ${temp} degrees and ${condition}. Feels like ${feelsLike}. High of ${high}, low of ${low}.`;
+      const headsUp = await require('../weatherAlerts').headsUp();     // "Heads up: rain likely from about 4 PM."
+      return `Currently ${temp} degrees and ${condition}. Feels like ${feelsLike}. High of ${high}, low of ${low}.${headsUp ? ` ${headsUp}` : ''}`;
     } catch { return 'Unable to get weather data.'; }
   }
 

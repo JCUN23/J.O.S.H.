@@ -94,4 +94,5 @@ if (require.main === module) {
   require('./lib/bambu').start();
   require('./lib/timers').start();
   require('./lib/gameAlerts').start();
+  require('./lib/weatherAlerts').start();
 }

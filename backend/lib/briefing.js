@@ -22,7 +22,7 @@ const within = (p) => Promise.race([Promise.resolve(p).catch(() => null), new Pr
 
 // Default sources; tests inject their own
 const SOURCES = {
-  weather: () => require('./sentinel/executeTool').executeTool('get_weather', {}),
+  weather: () => require('./sentinel/executeTool').executeTool('get_weather', {}),   // includes the heads-up line
   calendar: () => require('./calendar').answer('today'),
   sports: () => require('./sports').answer('today'),
   reminders: () => require('./timers').list(),
