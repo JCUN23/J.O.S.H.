@@ -2,6 +2,8 @@
 const express = require('express');
 const axios = require('axios');
 
+const { forSpeech } = require('../lib/speech');
+
 const router = express.Router();
 
 // ============================================
@@ -25,7 +27,7 @@ router.post('/api/tts', async (req, res) => {
     const response = await axios.post(
       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
       {
-        text,
+        text: forSpeech(text),
         model_id: 'eleven_turbo_v2_5',
         voice_settings: {
           stability: 0.5,

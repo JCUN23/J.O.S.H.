@@ -33,6 +33,7 @@ import BambuPrinterWidget from './components/BambuPrinterWidget';
 import SmartThingsWidget from './components/SmartThingsWidget';
 import PhilipsHueWidget from './components/PhillipsHueWidget';
 import { processCommand } from './utils/sentinelLocal';
+import { forSpeech } from './utils/speech';
 import { getGoogleCalendarEvents } from './utils/calendarApi';
 
 const CLIENT_ID = "0982022f80f240138fd76bad2c53f3bd";
@@ -240,7 +241,8 @@ const BatcomputerHub = () => {
   }, []);
 
   // ElevenLabs TTS with browser fallback - returns promise that resolves when done speaking
-  const speak = useCallback(async (text) => {
+  const speak = useCallback(async (shown) => {
+    const text = forSpeech(shown);           // "54°F" -> "54 degrees"
     console.log('[Sentinel] Speaking:', text);
 
     // Function to use browser TTS
