@@ -40,6 +40,7 @@ test('sentinel chat (Groq)', async (t) => {
   });
 
   await t.test('tool loop: history sent back to Groq has no reasoning field', async () => {
+    require('../lib/sentinel/memory').forget();   // no earlier exchange in this request
     requests.length = 0;
     script = [
       { finish_reason: 'tool_calls', message: { role: 'assistant', content: null, reasoning: 'need the time',
@@ -83,4 +84,28 @@ test('sentinel chat (Groq)', async (t) => {
     assert.match(r.body.detail, /decommissioned/);
     assert.equal(r.body.model, 'openai/gpt-oss-120b');
   });
+});
+
+test('follow-ups: the last few exchanges go along; forgotten after quiet minutes', async (t) => {
+  const memory = require('../lib/sentinel/memory');
+  memory.forget();
+  const app = await startApp(require('../routes/sentinel'));
+  t.after(app.close);
+  const quiet = [console.log, console.error]; console.log = console.error = () => {};
+  t.after(() => { [console.log, console.error] = quiet; });
+
+  requests.length = 0;
+  script = [{ finish_reason: 'stop', message: { role: 'assistant', content: 'The Lions play at 1 PM.' } },
+            { finish_reason: 'stop', message: { role: 'assistant', content: 'Tomorrow: nothing.' } }];
+  await app.call('POST', '/api/sentinel/chat', { message: 'when do the lions play' });
+  await app.call('POST', '/api/sentinel/chat', { message: 'what about tomorrow' });
+  const sent = requests[1].messages.map((m) => `${m.role}:${m.content}`);
+  assert.deepEqual(sent.slice(1), ['user:when do the lions play', 'assistant:The Lions play at 1 PM.', 'user:what about tomorrow']);
+
+  // 6 quiet minutes later: a fresh start
+  const later = Date.now() + 6 * 60_000;
+  assert.deepEqual(memory.recent(later), []);
+  memory.remember('a', 'b'); memory.remember('c', 'd'); memory.remember('e', 'f'); memory.remember('g', 'h');
+  assert.equal(memory.recent().length, 6, 'only the last 3 exchanges');
+  memory.forget();
 });
