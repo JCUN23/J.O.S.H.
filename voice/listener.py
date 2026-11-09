@@ -19,6 +19,7 @@ Settings come from /opt/sentinel/backend/.env (environment variables win):
   VOICE_THRESHOLD    0.5    higher = fewer false wakes, more misses
   VOICE_MIC          name fragment or index of the input device (default: first USB mic)
   VOICE_SPEAKER      auto (first USB speaker) | none | an ALSA device like plughw:2,0
+  VOICE_MIN_LEVEL    60     lowest loudness that counts as speech (quiet mics)
   VOICE_BACKEND      http://127.0.0.1:3001
 """
 import argparse
@@ -81,6 +82,7 @@ class Config:
         self.backend = get('VOICE_BACKEND', 'http://127.0.0.1:3001').rstrip('/')
         self.max_s = float(get('VOICE_MAX_SECONDS', '10'))
         self.end_silence = float(get('VOICE_END_SILENCE', '1.0'))
+        self.min_level = float(get('VOICE_MIN_LEVEL', '60'))
 
 
 # ---------- end of speech ----------
@@ -92,8 +94,10 @@ class Endpointer:
     push(rms) -> 'more' | 'done' (you spoke, then paused) | 'nothing' (you never spoke)
     """
 
-    def __init__(self, noise_rms, end_silence=1.0, max_s=10.0, start_timeout=5.0, ignore_s=0.25):
-        self.thr = max(noise_rms * 3.0, 250.0)
+    # min_level: floor for "that's speech", for a dead-silent room. Low on purpose: some USB
+    # mics are quiet (the UM02 puts normal talking at rms 100-300 over a room at ~35).
+    def __init__(self, noise_rms, end_silence=1.0, max_s=10.0, start_timeout=5.0, ignore_s=0.25, min_level=60.0):
+        self.thr = max(noise_rms * 3.0, min_level)
         self.end_silence, self.max_s, self.start_timeout, self.ignore_s = end_silence, max_s, start_timeout, ignore_s
         self.t = 0.0
         self.loud_run = 0
@@ -298,7 +302,7 @@ def handle_command(cfg, api, mic, speaker, noise):
     if not r.get('listen'):
         log(f'  ignored: {r.get("why", "backend said no")}')
         return
-    ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s)
+    ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s, min_level=cfg.min_level)
     frames = []
     while True:
         f = mic.frame()
@@ -307,10 +311,11 @@ def handle_command(cfg, api, mic, speaker, noise):
         if verdict != 'more':
             break
     if verdict == 'nothing':
-        log('  no command heard')
+        log(f'  no command heard (room {noise:.0f}, needed {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f})')
         api.utterance(b'')
         return
     audio = np.concatenate(frames)
+    log(f'  room {noise:.0f}, speech threshold {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f}')
     t0 = time.time()
     res = api.utterance(to_wav(audio))
     log(f'  heard "{res.get("text", "")}" ({len(audio) / RATE:.1f}s audio, {time.time() - t0:.1f}s round trip) '

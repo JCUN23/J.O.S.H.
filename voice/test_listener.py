@@ -49,6 +49,12 @@ class EndpointerTest(unittest.TestCase):
         self.assertEqual(run(L.Endpointer(900), frames((2, 1500), (5, 900)))[0], 'nothing')
         self.assertEqual(run(L.Endpointer(900), frames((0.3, 900), (1, 4000), (2, 900)))[0], 'done')
 
+    def test_quiet_mic_in_a_quiet_room_still_counts_as_speech(self):
+        # Josh's UM02 (Nov 8 mic check): room ~35, normal talking 100-300
+        v, t = run(L.Endpointer(35), frames((0.3, 35), (0.5, 160), (0.2, 90), (0.6, 220), (1.5, 35)))
+        self.assertEqual(v, 'done')
+        self.assertAlmostEqual(t, 0.3 + 1.3 + 1.0, delta=0.1)
+
     def test_never_stops_talking_caps_at_max(self):
         v, t = run(L.Endpointer(100, max_s=4), frames((10, 2000)))
         self.assertEqual((v, t), ('done', 4.0))
