@@ -6,6 +6,14 @@ const notify = require('../lib/notify');
 
 const router = express.Router();
 
+// Home location for the weather widget, from .env (HOME_LAT/HOME_LON): kept out of the
+// public repo. Only reachable on the tailnet, like the rest of the panel.
+router.get('/api/home/location', (req, res) => {
+  const lat = Number(process.env.HOME_LAT), lon = Number(process.env.HOME_LON);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(404).json({ error: 'Set HOME_LAT and HOME_LON in backend/.env' });
+  res.json({ lat, lon });
+});
+
 router.get('/api/presence', (req, res) => {
   const people = presence.snapshot();
   res.json({ configured: people.length > 0, anyoneHome: presence.anyoneHome(), people });

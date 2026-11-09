@@ -12,7 +12,7 @@ const QuickControls = ({ theme }) => {
 
     const lights = async (on) => {
         setBusy(on ? 'on' : 'off'); setMsg('');
-        const r = await allLights(on, ['']);
+        const r = await allLights(on, [on ? 'All lights on.' : 'All lights off.']);
         setMsg(r.response);
         setBusy(null);
     };

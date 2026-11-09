@@ -58,6 +58,10 @@ const router = express.Router();
 // Shared by the chat route and the Pi mic (routes/voice.js), so a command spoken to the
 // Pi with no panel open runs the same tools. Returns { response, toolsExecuted }.
 async function runSentinel(message, { spotifyToken } = {}) {
+  // Everyday phrasings ("lights off", "pause", "next song") skip the AI entirely
+  const quick = await require('../lib/sentinel/quick').quickCommand(message, { spotifyToken });
+  if (quick) return quick;
+
   // Build initial messages array — this grows every iteration
   const messages = [
     { role: 'system', content: SENTINEL_SYSTEM_PROMPT },

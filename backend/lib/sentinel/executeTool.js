@@ -83,7 +83,9 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   // ===== WEATHER =====
   if (toolName === 'get_weather') {
     try {
-      const lat = 42.751784, lon = -83.0058174;
+      // Home location comes from .env (HOME_LAT/HOME_LON, also used for sunset rules): never in the public repo
+      const lat = Number(process.env.HOME_LAT), lon = Number(process.env.HOME_LON);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return 'Weather needs HOME_LAT and HOME_LON in backend/.env.';
       const weatherRes = await axios.get(
         `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=America/Detroit`
       );
@@ -330,8 +332,16 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     return out.join('. ');
   }
 
-  if (toolName === 'get_news') return 'News headlines not currently available.';
-  if (toolName === 'get_calendar') return 'Calendar access not available in this context.';
+  if (toolName === 'get_news') {
+    try {
+      const { getNews } = require('../../routes/news');
+      const cat = { technology: 'tech', tech: 'tech', world: 'world', sports: 'sports', business: 'business' }[args.category] || 'all';
+      const { articles } = await getNews(cat, 5);
+      if (!articles.length) return "The news sources aren't responding right now.";
+      return articles.map((a) => `${a.title} (${a.source})`).join('; ');
+    } catch (err) { return `Couldn't load the news (${err.message}).`; }
+  }
+  if (toolName === 'get_calendar') return require('../calendar').answer(args.when);
 
   return `Unknown tool: ${toolName}`;
 }

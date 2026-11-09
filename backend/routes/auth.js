@@ -155,3 +155,4 @@ for (const provider of Object.keys(REFRESHERS)) {
 }
 
 module.exports = router;
+module.exports.REFRESHERS = REFRESHERS;   // lib/calendar.js reads the calendar server-side

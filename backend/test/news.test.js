@@ -74,3 +74,12 @@ test('HTTP: unknown category 400, all sources down 502 (no fake headlines)', asy
   assert.deepEqual(r.body.articles, []);
   assert.ok(r.body.sources.every((s) => s.ok === false));
 });
+
+test("Hacker News' 'Article URL: ... Comments URL' boilerplate is not shown as a summary", () => {
+  const hn = `<rss><channel><item><title>Show HN: a thing</title><link>https://example.com/x</link>
+    <description><![CDATA[<p>Article URL: <a href="https://example.com/x">https://example.com/x</a></p><p>Comments URL: <a href="https://news.ycombinator.com/item?id=1">...</a></p>]]></description>
+    <pubDate>Mon, 09 Nov 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
+  const [a] = parseFeed(hn, { name: 'Hacker News' });
+  assert.equal(a.title, 'Show HN: a thing');
+  assert.equal(a.description, '');
+});

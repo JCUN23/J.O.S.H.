@@ -116,8 +116,8 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "get_calendar",
-      description: "Get upcoming calendar events",
-      parameters: { type: "object", properties: {} }
+      description: "Josh's Google Calendar events (all his calendars, including shared ones). Use for 'what's on my calendar', 'am I free tomorrow', 'what's this weekend look like'.",
+      parameters: { type: "object", properties: { when: { type: "string", enum: ["today", "tomorrow", "weekend", "week"], description: "Which days. Default week (next 7 days)." } } }
     }
   },
   {
@@ -138,8 +138,8 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "get_news",
-      description: "Get current news headlines",
-      parameters: { type: "object", properties: {} }
+      description: "Current headlines from the news widget's sources.",
+      parameters: { type: "object", properties: { category: { type: "string", enum: ["all", "technology", "world", "sports", "business"], description: "Default all" } } }
     }
   },
   {

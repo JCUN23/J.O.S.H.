@@ -29,7 +29,7 @@ test('sentinel chat (Groq)', async (t) => {
 
   await t.test('uses the configured model + low reasoning, never the retired llama model', async () => {
     script = [{ finish_reason: 'stop', message: { role: 'assistant', content: 'It is 10pm.', reasoning: 'user wants time' } }];
-    const r = await app.call('POST', '/api/sentinel/chat', { message: 'what time is it' });
+    const r = await app.call('POST', '/api/sentinel/chat', { message: 'how long until sunset' });
     assert.equal(r.status, 200);
     assert.equal(r.body.response, 'It is 10pm.');
     const sent = requests.at(-1);
@@ -46,7 +46,7 @@ test('sentinel chat (Groq)', async (t) => {
         tool_calls: [{ id: 'c1', type: 'function', function: { name: 'get_time', arguments: '{}' } }] } },
       { finish_reason: 'stop', message: { role: 'assistant', content: 'Done.' } },
     ];
-    const r = await app.call('POST', '/api/sentinel/chat', { message: 'what time is it' });
+    const r = await app.call('POST', '/api/sentinel/chat', { message: 'how long until sunset' });
     assert.equal(r.status, 200);
     const second = requests[1].messages;
     const echoed = second.find((m) => m.role === 'assistant');

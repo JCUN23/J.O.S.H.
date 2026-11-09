@@ -73,6 +73,8 @@ function parseFeed(body, source) {
   }));
   return [...rss, ...atom]
     .filter((a) => a.title && /^https?:\/\//.test(a.url))
+    // Hacker News' feed has no summary: its description is "Article URL: ... Comments URL: ..."
+    .map((a) => (/^(Article URL|Comments URL):/i.test(a.description || '') ? { ...a, description: '' } : a))
     .map((a) => {
       const d = new Date(a.pubDate);
       return { ...a, source: source.name, pubDate: (isNaN(d) ? new Date() : d).toISOString() };
@@ -130,4 +132,5 @@ router.get('/api/news', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.getNews = getNews;
 module.exports._test = { parseFeed, getNews, cache, SOURCES };
