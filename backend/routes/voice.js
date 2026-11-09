@@ -143,6 +143,10 @@ router.get('/api/voice/events', (req, res) => {
   req.on('close', () => { clearInterval(ping); clients.delete(client); });
 });
 
+// Something for Alfred to say out loud on the voice panel (timers, reminders, briefings).
+// Returns false when no panel is open.
+router.announce = (text) => sendToOnePanel({ type: 'announce', text });
+
 router._test = {
   cleanTranscript,
   setFetch: (f) => { fetchImpl = f; },

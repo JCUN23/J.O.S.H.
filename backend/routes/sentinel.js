@@ -71,7 +71,7 @@ async function runAgent(message, { spotifyToken, history = [] } = {}) {
 
   // Build initial messages array — this grows every iteration
   const messages = [
-    { role: 'system', content: SENTINEL_SYSTEM_PROMPT },
+    { role: 'system', content: `${SENTINEL_SYSTEM_PROMPT}\n\nRight now it is ${new Date().toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.` },
     ...history,                                   // the last few exchanges: follow-ups work
     { role: 'user', content: message }
   ];

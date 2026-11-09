@@ -51,4 +51,11 @@ describe('piVoice', () => {
         es.emit({ type: 'transcript', text: 'pause', id: 8 });
         expect(onTranscript.mock.calls.map((c) => c[0])).toEqual(['play discover weekly', 'pause']);
     });
+
+    it('announcements (timers, reminders) go to onAnnounce', () => {
+        const onAnnounce = vi.fn();
+        connectPiVoice({ onAnnounce });
+        FakeEventSource.last.emit({ type: 'announce', text: 'Your pasta timer finished.', id: 3 });
+        expect(onAnnounce).toHaveBeenCalledWith('Your pasta timer finished.');
+    });
 });

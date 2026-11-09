@@ -436,6 +436,8 @@ const BatcomputerHub = () => {
   // reply. With no voice panel connected (locked, closed, asleep) the Pi runs it itself.
   const processVoiceCommandRef = useRef(processVoiceCommand);
   useEffect(() => { processVoiceCommandRef.current = processVoiceCommand; }, [processVoiceCommand]);
+  const speakRef = useRef(speak);
+  useEffect(() => { speakRef.current = speak; }, [speak]);
   useEffect(() => {
     if (!voicePanel || isLocked || showOnboarding) return undefined;
     return connectPiVoice({
@@ -451,6 +453,13 @@ const BatcomputerHub = () => {
       },
       onNothing: () => { setListening(false); setTranscript(''); setResponse("Didn't catch that."); },
       onError: (msg) => { setListening(false); setTranscript(''); setVoiceError(msg); },
+      // Timers, reminders, briefings: say it (and show it) even if nobody asked just now
+      onAnnounce: async (text) => {
+        window.dispatchEvent(new Event(WAKE_EVENT));
+        setTranscript(''); setResponse(text);
+        reportSpeaking(true);
+        try { await speakRef.current(text); } finally { reportSpeaking(false); }
+      },
     });
   }, [voicePanel, isLocked, showOnboarding]);
 

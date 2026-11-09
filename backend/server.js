@@ -92,4 +92,5 @@ if (require.main === module) {
   const rules = require('./lib/rules');
   require('./lib/presence').start({ onEvent: (e) => rules.handlePresence(e) });
   require('./lib/bambu').start();
+  require('./lib/timers').start();
 }

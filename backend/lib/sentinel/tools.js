@@ -190,6 +190,53 @@ const SENTINEL_TOOLS = [
         required: ["name"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_timer",
+      description: "Start a countdown timer. Alfred announces it on the panel and pushes it to Josh's phone when it ends.",
+      parameters: {
+        type: "object",
+        properties: {
+          minutes: { type: "number", description: "Minutes (can combine with seconds)" },
+          seconds: { type: "number", description: "Seconds" },
+          label: { type: "string", description: "Optional name, e.g. 'pasta', 'laundry'" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_reminder",
+      description: "Remind Josh of something at a time (spoken on the panel + phone push). Use 'at' for a clock time, 'in_minutes' for relative ('in 2 hours' = 120).",
+      parameters: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "What to remind him, e.g. 'call Mom'" },
+          at: { type: "string", description: "Local time: '17:00', '5:30 pm', or 'YYYY-MM-DD HH:MM' for another day. A time that already passed today means tomorrow." },
+          in_minutes: { type: "number", description: "Minutes from now, instead of at" }
+        },
+        required: ["text"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_timers",
+      description: "What timers and reminders are running, with time left.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "cancel_timer",
+      description: "Cancel timers/reminders: by label ('pasta'), by kind ('timer', 'reminder'), or 'all'.",
+      parameters: { type: "object", properties: { label: { type: "string" } } }
+    }
   }
 ];
 

@@ -73,6 +73,12 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     }
   }
 
+  // ===== TIMERS & REMINDERS (lib/timers.js) =====
+  if (toolName === 'set_timer') return require('../timers').setTimer(args);
+  if (toolName === 'set_reminder') return require('../timers').setReminder(args);
+  if (toolName === 'list_timers') return require('../timers').describe();
+  if (toolName === 'cancel_timer') return require('../timers').cancel(args.label);
+
   // ===== TIME =====
   if (toolName === 'get_time') {
     const now = new Date();

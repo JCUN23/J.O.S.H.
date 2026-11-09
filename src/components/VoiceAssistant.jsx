@@ -1,5 +1,6 @@
 import React from 'react';
 import { Mic, MicOff, Cpu, Loader2, Ear, EarOff } from 'lucide-react';
+import TimerChips from './TimerChips';
 
 // Voice Assistant Component
 const VoiceAssistant = ({
@@ -84,6 +85,7 @@ const VoiceAssistant = ({
                     <Cpu className={`text-${theme}-400`} size={24} />
                     <h2 className={`text-xl font-semibold text-${theme}-400`}>SENTINEL INTERFACE</h2>
                     <h4 className={`text-${theme}-400 hidden md:block`}>Strategic Intelligence & Executive Liaison</h4>
+                    <TimerChips theme={theme} />
                     {processing && <Loader2 className="animate-spin text-cyan-400" size={20} />}
                 </div>
                 <div className="flex gap-2 items-center">
