@@ -123,7 +123,7 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
       else if (code <= 77) condition = 'snowy';
       else if (code <= 82) condition = 'rainy';
       else condition = 'stormy';
-      return `Currently ${temp}°F and ${condition}. Feels like ${feelsLike}°F. High of ${high}°F, low of ${low}°F.`;
+      return `Currently ${temp} degrees and ${condition}. Feels like ${feelsLike}. High of ${high}, low of ${low}.`;
     } catch { return 'Unable to get weather data.'; }
   }
 
@@ -139,6 +139,12 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   //   2. Start playback (artist catalog on shuffle, or specific track)
   //   3. Optionally extract dominant color from album/artist art
   //   4. Set Govee + Hue lights to that color
+  if (toolName === 'save_playlist_shortcut') {
+    if (!spotifyToken) return 'Spotify is not connected. Josh needs to log in on the dashboard first.';
+    if (!args.name) return 'What should I call it?';
+    return require('../spotifyPlay').saveCurrentAs(args.name, { Authorization: `Bearer ${spotifyToken}` });
+  }
+
   if (toolName === 'play_music') {
     if (!spotifyToken) return 'Spotify is not connected. Josh needs to log in on the dashboard first.';
 
@@ -146,59 +152,40 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     const spotifyHeaders = { Authorization: `Bearer ${spotifyToken}` };
 
     try {
-      // Step 1: Search — try artist first, fall back to track
-      const searchRes = await axios.get(`${SPOTIFY_BASE}/search`, {
-        headers: spotifyHeaders,
-        params: { q: args.query, type: 'artist,track,playlist', limit: 3 }
-      });
+      // Step 1: What to play: saved shortcuts, Josh's playlists, then search (lib/spotifyPlay.js)
+      const spotify = require('../spotifyPlay');
+      const pick = await spotify.resolve(args.query, { headers: spotifyHeaders, kind: args.kind });
+      if (pick.error) return pick.error;
+      const { playBody } = pick;
+      const imageUrl = pick.imageUrl;
+      let description = pick.description;
 
-      const artists = searchRes.data.artists?.items || [];
-      const tracks = searchRes.data.tracks?.items || [];
-      const playlists = searchRes.data.playlists?.items || [];
-
-      let playBody = {};     // What to send to /me/player/play
-      let imageUrl = null;   // Album/artist art for color extraction
-      let description = '';  // What we'll tell the model we did
-
-      if (artists.length > 0 && artists[0].name.toLowerCase().includes(args.query.toLowerCase().split(' ')[0])) {
-        // Artist match — play their full catalog on shuffle (the "mood" behavior)
-        const artist = artists[0];
-        playBody = { context_uri: artist.uri };
-        imageUrl = artist.images?.[0]?.url;
-        description = `Playing ${artist.name} on shuffle.`;
-      } else if (tracks.length > 0) {
-        // Track match — play that specific track
-        const track = tracks[0];
-        playBody = { uris: [track.uri] };
-        imageUrl = track.album?.images?.[0]?.url;
-        description = `Playing "${track.name}" by ${track.artists[0].name}.`;
-      } else if (playlists.length > 0) {
-        // Playlist match — good for mood/genre queries like "chill lo-fi"
-        const playlist = playlists[0];
-        playBody = { context_uri: playlist.uri };
-        imageUrl = playlist.images?.[0]?.url;
-        description = `Playing playlist "${playlist.name}".`;
-      } else {
-        return `Couldn't find anything on Spotify for "${args.query}".`;
+      // Step 2: Where: a named device ("on The Frame" opens Spotify on the TV if needed),
+      // else the active device, else the first available one.
+      let deviceId = null;
+      if (args.device) {
+        const d = await spotify.pickDevice(args.device, spotifyHeaders);
+        if (d.error) return d.error;
+        deviceId = d.device.id;
+        description += ` On ${d.device.name}.`;
       }
-
-      // Step 2: Start playback
+      const jsonHeaders = { ...spotifyHeaders, 'Content-Type': 'application/json' };
+      const play = () => axios.put(`${SPOTIFY_BASE}/me/player/play`, playBody, { headers: jsonHeaders, params: deviceId ? { device_id: deviceId } : undefined });
       try {
-        await axios.put(`${SPOTIFY_BASE}/me/player/play`, playBody, { headers: { ...spotifyHeaders, 'Content-Type': 'application/json' } });
+        await play();
       } catch (playErr) {
-        // 404 = no active device. Try to find one and transfer playback.
+        // 404 = no active device (or the chosen one isn't active yet): transfer, then play.
         if (playErr.response?.status === 404 || playErr.response?.status === 403) {
-          const devicesRes = await axios.get(`${SPOTIFY_BASE}/me/player/devices`, { headers: spotifyHeaders });
-          const devices = devicesRes.data.devices || [];
-          if (devices.length === 0) return `${description} But no Spotify device is available — open Spotify on a device first.`;
-          // Transfer to the first available device
-          await axios.put(`${SPOTIFY_BASE}/me/player`, {
-            device_ids: [devices[0].id], play: true
-          }, { headers: { ...spotifyHeaders, 'Content-Type': 'application/json' } });
-          // Retry play
-          await axios.put(`${SPOTIFY_BASE}/me/player/play`, playBody, { headers: { ...spotifyHeaders, 'Content-Type': 'application/json' } });
+          if (!deviceId) {
+            const devicesRes = await axios.get(`${SPOTIFY_BASE}/me/player/devices`, { headers: spotifyHeaders });
+            const devices = devicesRes.data.devices || [];
+            if (devices.length === 0) return `${description} But no Spotify device is available — open Spotify on a device first.`;
+            deviceId = devices[0].id;
+          }
+          await axios.put(`${SPOTIFY_BASE}/me/player`, { device_ids: [deviceId], play: false }, { headers: jsonHeaders });
+          await play();
         } else {
-          return `${description} But playback failed: ${playErr.message}`;
+          return `${description} But playback failed: ${playErr.response?.data?.error?.message || playErr.message}`;
         }
       }
 

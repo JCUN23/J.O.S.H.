@@ -161,6 +161,7 @@ const KNOWN_APPS = [
   { name: 'Fubo', aliases: ['fubotv', 'fubo tv'], ids: ['3201903017953'] },
   { name: 'Netflix', aliases: [], ids: ['3201907018807', '11101200001'] },
   { name: 'YouTube', aliases: [], ids: ['111299001912'] },
+  { name: 'Spotify', aliases: [], ids: ['3201606009684'] },
   { name: 'YouTube TV', aliases: [], ids: ['3201707014489'] },
   { name: 'Prime Video', aliases: ['amazon prime', 'prime'], ids: ['3201910019365', '3201512006785'] },
   { name: 'Disney+', aliases: ['disney plus', 'disney'], ids: ['3202204027038', '3202009021709', '3201901017640'] },

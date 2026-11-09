@@ -150,14 +150,28 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "play_music",
-      description: "Search for and play music on Spotify. Use for artist requests, song requests, mood requests, or genre requests. Can also set the room lights to match the album/artist colors for an immersive vibe.",
+      description: "Play music on Spotify: an artist, song, album, mood, genre, or a playlist by name (Josh's own playlists and saved shortcuts like Discover Weekly work by name). Can play on a specific device (e.g. 'The Frame' TV, which opens Spotify on it if needed) and set the room lights to match the album art.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "What to play — artist name, song title, album, genre, or mood (e.g. 'Tyler the Creator', 'chill lo-fi', 'Bohemian Rhapsody')" },
+          query: { type: "string", description: "What to play: artist, song, album, playlist name, genre or mood (e.g. 'Tyler the Creator', 'Discover Weekly', 'chill lo-fi')" },
+          kind: { type: "string", enum: ["playlist", "album", "artist", "track"], description: "Set when Josh says what it is ('my workout playlist', 'the album ...')" },
+          device: { type: "string", description: "Where to play, if Josh names a place or device (e.g. 'The Frame', 'office', 'phone'). Omit to use the active device." },
           set_lights: { type: "boolean", description: "Whether to set room lights to match the album art colors. Default true for mood/vibe requests, false for simple play requests." }
         },
         required: ["query"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_playlist_shortcut",
+      description: "Remember the playlist (or album) playing on Spotify right now under a name, so 'play <name>' works later. Use when Josh says 'save this playlist as X' or 'remember this as X'. Needed for Spotify-made playlists like Discover Weekly, which search can't find.",
+      parameters: {
+        type: "object",
+        properties: { name: { type: "string", description: "What Josh will call it, e.g. 'Discover Weekly'" } },
+        required: ["name"]
       }
     }
   }
