@@ -57,6 +57,7 @@ app.use(require('./routes/gameday'));
 app.use(require('./routes/automation'));
 app.use(require('./routes/sentinel'));
 app.use(require('./routes/tts'));
+app.use(require('./routes/voice'));
 
 app.use('/api', apiNotFound);
 

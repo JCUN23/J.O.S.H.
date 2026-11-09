@@ -1,0 +1,22 @@
+# Pi mic listener ("Hey Jarvis"). Installed by scripts/voice-install.sh, which
+# replaces __USER__ with the Pi's login user. Logs: journalctl -u sentinel-voice -f
+[Unit]
+Description=Sentinel Pi mic (wake word listener)
+After=sentinel.service sound.target
+Wants=sentinel.service
+
+[Service]
+Type=simple
+User=__USER__
+SupplementaryGroups=audio
+WorkingDirectory=/opt/sentinel/voice
+ExecStart=/opt/sentinel/voice/.venv/bin/python -u /opt/sentinel/voice/listener.py
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

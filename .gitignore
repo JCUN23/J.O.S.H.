@@ -39,3 +39,7 @@ backend/.env.bak*
 
 # server-side OAuth token store (secrets)
 backend/data/
+
+# Pi mic listener
+voice/.venv/
+__pycache__/

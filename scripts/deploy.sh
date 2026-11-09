@@ -31,6 +31,8 @@ rsync -az --delete \
   --exclude '.env' --exclude '.env.bak*' \
   backend/ "$HOST:$APP_DIR/backend/"
 rsync -az deploy scripts "$HOST:$APP_DIR/"
+# Pi mic listener; its venv lives on the Pi and is never synced.
+rsync -az --delete --exclude .venv --exclude __pycache__ --exclude 'test_*.py' voice/ "$HOST:$APP_DIR/voice/"
 
 # First deploy only: seed the Pi's .env and logins from this Mac. Later deploys
 # never overwrite them (the Pi's copies are the source of truth from then on).
@@ -55,8 +57,12 @@ for f in tokens faces rules scenes gameday activity; do
   seed "backend/data/$f.json" "$APP_DIR/backend/data/$f.json"
 done
 
-echo "==> Installing prod deps on Pi + restarting"
-ssh -t "$HOST" "cd $APP_DIR/backend && npm ci --omit=dev --no-audit --no-fund && sudo systemctl restart sentinel"
+echo "==> Installing prod deps + Pi mic listener on Pi, restarting"
+# The voice install runs first: it may add VOICE_TOKEN to .env, which the restart picks up.
+# SKIP_VOICE=1 to leave the Pi mic alone.
+VOICE_STEP="bash $APP_DIR/scripts/voice-install.sh &&"
+[ "${SKIP_VOICE:-}" = "1" ] && VOICE_STEP=""
+ssh -t "$HOST" "cd $APP_DIR/backend && npm ci --omit=dev --no-audit --no-fund && $VOICE_STEP sudo systemctl restart sentinel"
 
 echo "==> Health check"
 if ssh "$HOST" 'for i in $(seq 1 20); do curl -fsS localhost:3001/api/health >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'; then

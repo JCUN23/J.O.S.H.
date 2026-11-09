@@ -42,7 +42,7 @@ async function startApp(...routers) {
     let json; try { json = JSON.parse(text); } catch { json = text; }
     return { status: res.status, body: json };
   };
-  return { call, close: () => new Promise((r) => server.close(r)) };
+  return { call, base, close: () => new Promise((r) => server.close(r)) };
 }
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));

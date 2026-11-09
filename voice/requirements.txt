@@ -1,0 +1,10 @@
+# Pi mic listener. openwakeword itself is installed with --no-deps by
+# scripts/voice-install.sh: its Linux metadata requires tflite-runtime, which has no
+# wheel for newer Pi OS Pythons. We run it on ONNX instead, so these are its real deps.
+numpy>=1.24,<3
+scipy>=1.10,<2
+sounddevice>=0.4.6,<0.6
+onnxruntime>=1.17,<2
+tqdm>=4,<5
+requests>=2,<3
+scikit-learn>=1.3,<2

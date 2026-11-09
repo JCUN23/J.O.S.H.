@@ -13,6 +13,7 @@ import FrameTvWidget from './components/FrameTvWidget';
 import IdleMode from './components/IdleMode';
 import { createUtterance, mergeSpeech } from './utils/utterance';
 import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT } from './utils/idlePrefs';
+import { getVoicePanel, setVoicePanel, connectPiVoice, reportSpeaking } from './utils/piVoice';
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
 import FaceLock from './components/AuthAndProfiles/FaceLock';
@@ -65,6 +66,8 @@ const BatcomputerHub = () => {
   const [idleEnabled, setIdleEnabledState] = useState(getIdleEnabled);   // per device
   const [layoutEditing, setLayoutEditing] = useState(false);
   const toggleIdle = () => { const next = !idleEnabled; setIdleEnabled(next); setIdleEnabledState(next); };
+  const [voicePanel, setVoicePanelState] = useState(getVoicePanel);       // runs what the Pi mic hears
+  const toggleVoicePanel = () => { const next = !voicePanel; setVoicePanel(next); setVoicePanelState(next); };
   const [wakeWordActive, setWakeWordActive] = useState(false); // Is always-on listening active?
   const [voiceError, setVoiceError] = useState('');          // why the mic isn't hearing you, in words
   const voiceBlockedRef = useRef(false);                     // fatal mic error: stop auto-restarting until a tap
@@ -450,6 +453,29 @@ const BatcomputerHub = () => {
       awaitingCommandRef.current = false;
     }
   }, [speak]);
+
+  // Pi mic (voice/listener.py): the Pi hears "Hey Jarvis" and the command, the backend
+  // transcribes it, and this panel runs it exactly like a spoken command and speaks the
+  // reply. With no voice panel connected (locked, closed, asleep) the Pi runs it itself.
+  const processVoiceCommandRef = useRef(processVoiceCommand);
+  useEffect(() => { processVoiceCommandRef.current = processVoiceCommand; }, [processVoiceCommand]);
+  useEffect(() => {
+    if (!voicePanel || isLocked || showOnboarding) return undefined;
+    return connectPiVoice({
+      onWake: () => {
+        if (processingRef.current) return;
+        setListening(true); setTranscript('Listening…'); setResponse('');
+        window.dispatchEvent(new Event(WAKE_EVENT));
+      },
+      onTranscript: async (text) => {
+        setListening(false); setTranscript(text);
+        reportSpeaking(true);
+        try { await processVoiceCommandRef.current(text); } finally { reportSpeaking(false); }
+      },
+      onNothing: () => { setListening(false); setTranscript(''); setResponse("Didn't catch that."); },
+      onError: (msg) => { setListening(false); setTranscript(''); setVoiceError(msg); },
+    });
+  }, [voicePanel, isLocked, showOnboarding]);
 
   // A spoken command is complete (utils/utterance.js): send it. Manual mode stops the mic.
   const finishUtterance = useCallback((text) => {
@@ -969,6 +995,8 @@ const BatcomputerHub = () => {
             toggleWidgetVisibility={toggleWidgetVisibility}
             idleEnabled={idleEnabled}
             toggleIdle={toggleIdle}
+            voicePanel={voicePanel}
+            toggleVoicePanel={toggleVoicePanel}
             onEditLayout={() => setLayoutEditing(true)}
           />
 
