@@ -143,4 +143,4 @@ async function answer(query = '', { now = new Date(), fetchImpl = fetch } = {}) 
 }
 
 const _clearCache = () => cache.clear();
-module.exports = { answer, describe, _clearCache };
+module.exports = { answer, describe, _clearCache, gamesOn, leagueOf, involves, dayKey, ESPN, SCOREBOARD_PARAMS, SCOREBOARD_EXTRA };
