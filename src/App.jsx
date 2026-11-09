@@ -34,6 +34,8 @@ import { processCommand } from './utils/sentinelLocal';
 import { forSpeech } from './utils/speech';
 import { getGoogleCalendarEvents } from './utils/calendarApi';
 
+import { THEMES, getTheme, saveTheme } from './utils/themePrefs';
+
 const CLIENT_ID = "0982022f80f240138fd76bad2c53f3bd";
 
 // Main App Component
@@ -72,7 +74,9 @@ const BatcomputerHub = () => {
 
   const { profileData } = useProfile();
 
-  const [theme, setTheme] = useState(profileData?.theme || "cyan");
+  // Theme color: remembered per device (a refresh keeps it; the face lock uses it too)
+  const [theme, setTheme] = useState(() => getTheme(profileData?.theme));
+  useEffect(() => { saveTheme(theme); }, [theme]);
   // Light/dark is per device (the wall panel and laptop can differ), so localStorage, not profile.
   const [mode, setMode] = useState(() => {
     try { return localStorage.getItem('hud_mode') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
@@ -344,7 +348,7 @@ const BatcomputerHub = () => {
           el.classList.remove('hud-flash'); void el.offsetWidth; el.classList.add('hud-flash');
         }, 120);
       }
-    } else if (action === 'theme' && ['cyan', 'yellow', 'mocha'].includes(t)) setTheme(t);
+    } else if (action === 'theme' && THEMES.includes(t)) setTheme(t);
     else if (action === 'mode' && (t === 'light' || t === 'dark') && t !== mode) toggleMode();
     else if (action === 'lock' && getCachedFaces().length) setIsLocked(true);    // no faces = no way to unlock
     else if (action === 'idle') window.dispatchEvent(new Event(IDLE_NOW_EVENT));
