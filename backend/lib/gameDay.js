@@ -18,8 +18,16 @@ const state = createJsonStore(
 // Hue lights that get team colors, primary then secondary (the two Hue Go lamps)
 const HUE_LIGHTS = (process.env.HUE_GAMEDAY_LIGHTS || '5,4').split(',').map((s) => s.trim()).filter(Boolean);
 
+// Which Govee lights and TVs Game Day touches, by name (see devices.nameMatcher):
+//   GAMEDAY_GOVEE_LIGHTS="neon,!outdoor"   the indoor neon strips (default)
+//   GAMEDAY_TVS="The Frame"                 the TV called "The Frame" (default)
+// Set either to "*" to use every device.
+const pick = (env, dflt) => { const v = process.env[env]; return v === '*' ? undefined : (v || dflt); };
+const GOVEE_ONLY = () => pick('GAMEDAY_GOVEE_LIGHTS', 'neon,!outdoor,!outside,!patio,!porch');
+const TV_ONLY = () => pick('GAMEDAY_TVS', 'The Frame');
+
 const alternate = (colors) => (i) => (i % 2 === 0 ? colors.primary : colors.secondary);
-const setGoveeColors = (colors) => devices.goveeApply({ colorFor: alternate(colors) });
+const setGoveeColors = (colors) => devices.goveeApply({ colorFor: alternate(colors), only: GOVEE_ONLY() });
 const setHueColors = (colors) => devices.hueApply({ lightIds: HUE_LIGHTS, colorFor: alternate(colors) });
 // ---------- which streaming app ----------
 // ESPN lists each game's networks. A game on Peacock opens Peacock, ESPN+ opens the ESPN
@@ -81,7 +89,7 @@ async function currentEvent(team, fetchImpl = fetch) {
 
 const wakeFrameTv = async (team, event) => {
   const { app, why } = pickTvApp(team, networksOf(event));
-  const r = await devices.tvApply({ power: true, artMode: false, app: app || undefined, home: !app,
+  const r = await devices.tvApply({ only: TV_ONLY(), power: true, artMode: false, app: app || undefined, home: !app,
     mute: process.env.GAMEDAY_TV_MUTE === 'false' ? undefined : true });
   return `${r} (${why})`;
 };

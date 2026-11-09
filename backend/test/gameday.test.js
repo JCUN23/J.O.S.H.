@@ -7,27 +7,29 @@ const dir = tempStores();
 process.env.GAMEDAY_STORE_PATH = path.join(dir, 'gameday.json');
 Object.assign(process.env, { GOVEE_API_KEY: 'k', HUE_BRIDGE_IP: '10.0.0.2', HUE_USERNAME: 'u', SMARTTHINGS_TOKEN: 'PAT' });
 
-const sent = { govee: [], hue: [], tv: [] };
+const sent = { govee: [], hue: [], tv: [], tvIds: [] };
 let goveeDown = false;
 mockModules({ axios: {
   get: async (url) => {
     if (url.includes('govee')) {
       if (goveeDown) throw new Error('govee down');
       return { data: { data: { devices: [
-        { device: 'rope', model: 'H61A2', supportCmds: ['turn', 'color'] },
-        { device: 'plug', model: 'H5086', supportCmds: ['turn'] },
-        { device: 'lr', model: 'H6076', supportCmds: ['turn', 'color'] },
-        { device: 'neon', model: 'H61D5', supportCmds: ['turn', 'color'] },
+        { device: 'rope', deviceName: 'Neon Rope', model: 'H61A2', supportCmds: ['turn', 'color'] },
+        { device: 'plug', deviceName: 'Neon Plug', model: 'H5086', supportCmds: ['turn'] },
+        { device: 'lr', deviceName: 'LR Left', model: 'H6076', supportCmds: ['turn', 'color'] },
+        { device: 'porch', deviceName: 'Outdoor Neon', model: 'H61D5', supportCmds: ['turn', 'color'] },
+        { device: 'neon', deviceName: 'Office Neon', model: 'H61D5', supportCmds: ['turn', 'color'] },
       ] } } };
     }
-    return { data: { items: [{ deviceId: 'tv1', label: 'Frame TV', components: [{ capabilities: [{ id: 'samsungvd.mediaInputSource' }] }] }] } };
+    const tv = (deviceId, label) => ({ deviceId, label, components: [{ capabilities: [{ id: 'samsungvd.mediaInputSource' }] }] });
+    return { data: { items: [tv('tv1', 'The Frame'), tv('tv2', 'Living Room TV')] } };
   },
   put: async (url, body) => {
     if (url.includes('govee')) sent.govee.push(body);
     else sent.hue.push({ url, body });
     return { data: { code: 200 } };
   },
-  post: async (url, body) => { sent.tv.push(body.commands[0].command); return { data: {} }; },
+  post: async (url, body) => { sent.tv.push(body.commands[0].command); sent.tvIds.push(url.match(/devices\/([^/]+)/)?.[1]); return { data: {} }; },
 } });
 
 const { findTeam, TEAMS } = require('../lib/teams');
@@ -45,10 +47,13 @@ test('findTeam resolves names and aliases', () => {
   assert.equal(findTeam('Red Wings'), null);
 });
 
-test('activate: colors only reach color-capable lights; Hue gets primary/secondary; TV wakes', async () => {
+test('activate: only the indoor neon strips, the two Hue lamps and The Frame', async () => {
   const restore = quiet();
-  try { await gameDay.activate(findTeam('lions')); } finally { restore(); }
-  assert.deepEqual(sent.govee.map((b) => b.device), ['rope', 'neon']);   // no plug, no H6076
+  let entry;
+  try { entry = await gameDay.activate(findTeam('lions')); } finally { restore(); }
+  assert.deepEqual(sent.govee.map((b) => b.device), ['rope', 'neon']);   // not LR Left, not the outdoor one, plug can't color
+  assert.match(entry.results[0], /on Neon Rope, Neon Plug, Office Neon/);
+  assert.ok(sent.tvIds.length && sent.tvIds.every((id) => id === 'tv1'), `only The Frame: ${sent.tvIds}`);
   assert.deepEqual(sent.govee[0].cmd.value, findTeam('lions').colors.primary);
   assert.deepEqual(sent.govee[1].cmd.value, findTeam('lions').colors.secondary);
   assert.deepEqual(sent.hue.map((h) => h.url.match(/lights\/(\d+)/)[1]), ['5', '4']);

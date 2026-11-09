@@ -308,7 +308,9 @@ async function info(tv) {
     const { data } = await axios.get(`http://${tv.host}:${opt().httpPort}/api/v2/`, { timeout: 2500 });
     const d = data.device || {};
     if (d.wifiMac && d.wifiMac !== saved(tv).mac) remember(tv, { mac: d.wifiMac });
-    return { power: d.PowerState || 'on', model: d.modelName || d.model || null, frame: d.FrameTVSupport === 'true' };
+    const name = d.name ? String(d.name).replace(/^\[TV\]\s*/, '') : null;    // the name set on the TV
+    if (name && name !== saved(tv).tvName) remember(tv, { tvName: name });
+    return { power: d.PowerState || 'on', model: d.modelName || d.model || null, frame: d.FrameTVSupport === 'true', name };
   } catch { return null; }
 }
 
@@ -393,9 +395,24 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
   return did;
 }
 
+// opts.only (a nameMatcher spec) limits which TVs are touched. It matches the name in
+// FRAME_TVS or the name the TV reports about itself (remembered, so an off TV still matches).
 async function apply(opts) {
-  const tvs = configured();
-  if (!tvs.length) return 'TV: none configured (FRAME_TVS)';
+  const all = configured();
+  if (!all.length) return 'TV: none configured (FRAME_TVS)';
+  let tvs = all;
+  if (opts.only) {
+    const match = require('./devices').nameMatcher(opts.only);
+    tvs = [];
+    for (const tv of all) {
+      if (match(tv.name) || match(saved(tv).tvName)) { tvs.push(tv); continue; }
+      if (!saved(tv).tvName && match((await info(tv))?.name)) tvs.push(tv);
+    }
+    if (!tvs.length) {
+      const names = all.map((tv) => (saved(tv).tvName ? `${tv.name} ("${saved(tv).tvName}")` : tv.name));
+      return `TV: no TV matched "${opts.only}" (have: ${names.join(', ')})`;
+    }
+  }
   const out = [];
   for (const tv of tvs) {                // sequential: one TV's prompt/timeout shouldn't tangle another's
     try { out.push(`TV ${tv.name}: ${(await applyOne(tv, opts)).join(', ') || 'nothing to do'}`); }
@@ -406,7 +423,7 @@ async function apply(opts) {
 
 // Keys the panel is allowed to send.
 const KEYS = ['KEY_VOLUP', 'KEY_VOLDOWN', 'KEY_MUTE', 'KEY_HOME', 'KEY_RETURN', 'KEY_SOURCE', 'KEY_HDMI',
-  'KEY_PLAY', 'KEY_PAUSE', 'KEY_UP', 'KEY_DOWN', 'KEY_LEFT', 'KEY_RIGHT', 'KEY_ENTER'];
+  'KEY_PLAY', 'KEY_PAUSE', 'KEY_STOP', 'KEY_REWIND', 'KEY_FF', 'KEY_UP', 'KEY_DOWN', 'KEY_LEFT', 'KEY_RIGHT', 'KEY_ENTER'];
 
 const _resetApproval = () => { for (const k of Object.keys(needsApproval)) delete needsApproval[k]; };
 

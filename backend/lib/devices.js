@@ -53,9 +53,32 @@ async function goveeCommand(d, cmd) {
 // Apply a light state to every Govee device that supports each part of it.
 // colorFor(index) lets callers alternate colors across strips (Game Day).
 // Sent one at a time with a short gap: Govee's cloud drops bursts of parallel commands.
-async function goveeApply({ on, brightness, color, colorFor, kelvin }) {
+// "neon,!outdoor" -> matches names containing "neon" but not "outdoor" (case-insensitive).
+// An empty spec matches everything.
+function nameMatcher(spec) {
+  const terms = String(spec || '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const exclude = terms.filter((t) => t.startsWith('!')).map((t) => t.slice(1)).filter(Boolean);
+  const include = terms.filter((t) => !t.startsWith('!'));
+  return (...names) => {
+    const ns = names.filter(Boolean).map((n) => String(n).toLowerCase());
+    if (!ns.length) return !include.length;
+    if (ns.some((n) => exclude.some((t) => n.includes(t)))) return false;
+    return !include.length || ns.some((n) => include.some((t) => n.includes(t)));
+  };
+}
+
+// `only` (a nameMatcher spec) limits which Govee devices are touched, by device name.
+async function goveeApply({ on, brightness, color, colorFor, kelvin, only }) {
   if (!GOVEE_API_KEY) return 'Govee: not configured';
-  const devices = await goveeDevices();
+  let devices = await goveeDevices();
+  if (only) {
+    const all = devices;
+    const match = nameMatcher(only);
+    devices = all.filter((d) => match(d.deviceName));
+    if (!devices.length) {
+      return `Govee: no lights matched "${only}" (have: ${all.map((d) => d.deviceName || d.model).join(', ') || 'none'})`;
+    }
+  }
   const plan = [];
   let colorIndex = 0;
   for (const d of devices) {
@@ -72,7 +95,8 @@ async function goveeApply({ on, brightness, color, colorFor, kelvin }) {
     const why = await goveeCommand(d, cmd);
     if (why) failures.push(`${d.deviceName || d.model} ${cmd.name}: ${why}`);
   }
-  const head = `Govee: ${plan.length - failures.length}/${plan.length} commands ok`;
+  const used = only ? ` on ${devices.map((d) => d.deviceName || d.model).join(', ')}` : '';
+  const head = `Govee: ${plan.length - failures.length}/${plan.length} commands ok${used}`;
   return failures.length ? `${head} (failed: ${failures.join('; ')})` : head;
 }
 
@@ -121,10 +145,12 @@ async function tvApply(opts) {
   return smartThingsTvApply(opts);
 }
 
-async function smartThingsTvApply({ power, artMode, home }) {
-  const { token, tvs, send } = await frameTvs();
+async function smartThingsTvApply({ power, artMode, home, only }) {
+  const { token, tvs: all, send } = await frameTvs();
   if (!token) return 'TV: SmartThings not connected';
-  if (!tvs.length) return 'TV: no Frame TV found';
+  const tvs = only ? all.filter((tv) => nameMatcher(only)(tv.label, tv.name)) : all;
+  if (!all.length) return 'TV: no Frame TV found';
+  if (!tvs.length) return `TV: no TV matched "${only}" (have: ${all.map((tv) => tv.label || tv.name).join(', ')})`;
   await Promise.all(tvs.map(async (tv) => {
     if (artMode === false) await send(tv, 'samsungvd.ambient', 'off');
     if (power === true) await send(tv, 'switch', 'on');
@@ -136,4 +162,4 @@ async function smartThingsTvApply({ power, artMode, home }) {
   return `TV: ${tvs.length} ${tvs.length === 1 ? 'TV' : 'TVs'} ${what}`;
 }
 
-module.exports = { goveeApply, hueApply, tvApply, goveeDevices, delay };
+module.exports = { nameMatcher, goveeApply, hueApply, tvApply, goveeDevices, delay };

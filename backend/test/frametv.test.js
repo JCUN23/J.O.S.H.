@@ -31,7 +31,7 @@ const httpSrv = http.createServer((req, res) => {
   }
   if (tv.infoBudget-- <= 0) { req.socket.destroy(); return; }
   res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify({ device: { PowerState: tv.power, wifiMac: 'AA:BB:CC:DD:EE:FF', modelName: 'QN55LS03DAFXZA', FrameTVSupport: 'true' } }));
+  res.end(JSON.stringify({ device: { PowerState: tv.power, wifiMac: 'AA:BB:CC:DD:EE:FF', modelName: 'QN55LS03DAFXZA', FrameTVSupport: 'true', name: '[TV] The Frame' } }));
 });
 const wss = new WebSocketServer({ noServer: true });
 httpSrv.on('upgrade', (req, sock, head) => wss.handleUpgrade(req, sock, head, (ws) => wss.emit('connection', ws, req)));
@@ -231,6 +231,23 @@ test('unreachable TV reports a readable error, not a crash', async () => {
   const r = await frame.apply({ artMode: false, power: true });
   assert.match(r, /TV Office: error: didn't wake/);
   tv.power = 'on'; tv.wolWorks = true;
+});
+
+test('only: picks TVs by FRAME_TVS name or the name the TV reports; no match says what exists', async () => {
+  tv.power = 'on'; tv.art = 'on';
+  assert.match(await frame.apply({ only: 'The Frame', artMode: false }), /TV Office: /);   // reported name
+  assert.match(await frame.apply({ only: 'office', artMode: false }), /TV Office: /);     // configured name
+  assert.equal(await frame.apply({ only: 'Bedroom', artMode: false }), 'TV: no TV matched "Bedroom" (have: Office ("The Frame"))');
+});
+
+test('nameMatcher: includes, excludes, case-insensitive', () => {
+  const { nameMatcher } = require('../lib/devices');
+  const m = nameMatcher('neon,!outdoor');
+  assert.equal(m('Office Neon'), true);
+  assert.equal(m('Outdoor NEON'), false);
+  assert.equal(m('LR Left'), false);
+  assert.equal(m(undefined), false);
+  assert.equal(nameMatcher('')('anything'), true);
 });
 
 test('HTTP routes', async (t) => {
