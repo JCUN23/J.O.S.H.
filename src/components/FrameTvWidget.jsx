@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Tv, Power, Palette, Home, Volume1, Volume2, VolumeX, Link2, Loader2, RefreshCw } from 'lucide-react';
+import { Tv, Power, Palette, Home, Volume1, Volume2, VolumeX, Link2, Loader2, RefreshCw, Rewind, Play, Pause, FastForward } from 'lucide-react';
 import { getFrameTvs, pairFrameTv, frameTvCommand } from '../utils/frameTvApi';
 
 const stateLabel = (tv) => {
@@ -8,6 +8,14 @@ const stateLabel = (tv) => {
     if (tv.artMode === 'on') return { text: 'Art mode', cls: 'bg-purple-600/30 text-purple-300' };
     return { text: 'On', cls: 'bg-green-600/30 text-green-400' };
 };
+
+// Remote keys for whatever app is playing (ESPN, Peacock, HBO Max, Fubo all honor these).
+const PLAYBACK = [
+    ['KEY_REWIND', Rewind, 'Rewind'],
+    ['KEY_PLAY', Play, 'Play'],
+    ['KEY_PAUSE', Pause, 'Pause'],
+    ['KEY_FF', FastForward, 'Fast forward'],
+];
 
 // Frame TVs controlled directly on the home network (no SmartThings cloud).
 const FrameTvWidget = ({ theme }) => {
@@ -109,6 +117,13 @@ const FrameTvWidget = ({ theme }) => {
                                         <button onClick={() => run(tv, 'key', 'KEY_HOME')} disabled={any || !on} className={btn}>
                                             {spin(tv, 'KEY_HOME', Home)} Home
                                         </button>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-2 mb-2">
+                                        {PLAYBACK.map(([key, Icon, label]) => (
+                                            <button key={key} onClick={() => run(tv, 'key', key)} disabled={any || !on} className={btn} aria-label={label}>
+                                                {spin(tv, key, Icon)}
+                                            </button>
+                                        ))}
                                     </div>
                                     <div className="grid grid-cols-3 gap-2">
                                         <button onClick={() => run(tv, 'key', 'KEY_VOLDOWN')} disabled={any || !on} className={btn} aria-label="Volume down">
