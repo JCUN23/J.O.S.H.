@@ -5,11 +5,17 @@ const { mockModules, tempStores, startApp } = require('./helpers');
 
 const dir = tempStores();
 process.env.GAMEDAY_STORE_PATH = path.join(dir, 'gameday.json');
-Object.assign(process.env, { GOVEE_API_KEY: 'k', HUE_BRIDGE_IP: '10.0.0.2', HUE_USERNAME: 'u', SMARTTHINGS_TOKEN: 'PAT' });
+Object.assign(process.env, { GOVEE_API_KEY: 'k', HUE_BRIDGE_IP: '10.0.0.2', HUE_USERNAME: 'u' });
+// Manual Game Day looks up the live game for the TV app; no network in tests
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, ...rest) => (String(url).includes('espn.com') ? { ok: false } : realFetch(url, ...rest));
 
-const sent = { govee: [], hue: [], tv: [], tvIds: [] };
+const sent = { govee: [], hue: [], tv: [] };
 let goveeDown = false;
-mockModules({ axios: {
+mockModules({ './frameTv': {
+  configured: () => [{ id: 'office', name: 'Office', host: '10.0.0.35' }],
+  apply: async (opts) => { sent.tv.push(opts); return 'TV Office: on, art off, home screen'; },
+}, axios: {
   get: async (url) => {
     if (url.includes('govee')) {
       if (goveeDown) throw new Error('govee down');
@@ -21,15 +27,13 @@ mockModules({ axios: {
         { device: 'neon', deviceName: 'Office Neon', model: 'H61D5', supportCmds: ['turn', 'color'] },
       ] } } };
     }
-    const tv = (deviceId, label) => ({ deviceId, label, components: [{ capabilities: [{ id: 'samsungvd.mediaInputSource' }] }] });
-    return { data: { items: [tv('tv1', 'The Frame'), tv('tv2', 'Living Room TV')] } };
+    throw new Error(`unexpected GET ${url}`);
   },
   put: async (url, body) => {
     if (url.includes('govee')) sent.govee.push(body);
     else sent.hue.push({ url, body });
     return { data: { code: 200 } };
   },
-  post: async (url, body) => { sent.tv.push(body.commands[0].command); sent.tvIds.push(url.match(/devices\/([^/]+)/)?.[1]); return { data: {} }; },
 } });
 
 const { findTeam, TEAMS } = require('../lib/teams');
@@ -53,11 +57,12 @@ test('activate: only the indoor neon strips, the two Hue lamps and The Frame', a
   try { entry = await gameDay.activate(findTeam('lions')); } finally { restore(); }
   assert.deepEqual(sent.govee.map((b) => b.device), ['rope', 'neon']);   // not LR Left, not the outdoor one, plug can't color
   assert.match(entry.results[0], /on Neon Rope, Neon Plug, Office Neon/);
-  assert.ok(sent.tvIds.length && sent.tvIds.every((id) => id === 'tv1'), `only The Frame: ${sent.tvIds}`);
+  assert.equal(sent.tv.length, 1);
+  assert.equal(sent.tv[0].only, 'The Frame');                       // never the other TVs
   assert.deepEqual(sent.govee[0].cmd.value, findTeam('lions').colors.primary);
   assert.deepEqual(sent.govee[1].cmd.value, findTeam('lions').colors.secondary);
   assert.deepEqual(sent.hue.map((h) => h.url.match(/lights\/(\d+)/)[1]), ['5', '4']);
-  assert.deepEqual(sent.tv, ['off', 'on', 'send']);
+  assert.deepEqual({ power: sent.tv[0].power, artMode: sent.tv[0].artMode, mute: sent.tv[0].mute }, { power: true, artMode: false, mute: true });
 });
 
 test('one failing integration does not block the others; lightsOnly skips the TV', async () => {

@@ -2,7 +2,6 @@
 const axios = require('axios');
 const sharp = require('sharp');
 const { GOVEE_API_KEY, GOVEE_BASE_URL, HUE_BRIDGE_IP, HUE_USERNAME } = require('../config');
-const { SMARTTHINGS_BASE_URL, getSmartThingsToken } = require('../smartthings');
 const { parseColor, rgbToHueBridgeHSB } = require('../color');
 const { findTeam, TEAMS } = require('../teams');
 const gameDay = require('../gameDay');
@@ -300,11 +299,12 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
       return `Spotify playback failed: ${err.response?.data?.error?.message || err.message}`;
     }
   }
-  // ===== TV CONTROL (SmartThings → Samsung Frame TV) =====
-  if (toolName === 'control_tv' && require('../frameTv').configured().length) {
+  // ===== TV CONTROL (Frame TVs on the local network) =====
+  if (toolName === 'control_tv' && !require('../frameTv').configured().length) return 'No TV is set up (FRAME_TVS).';
+  if (toolName === 'control_tv') {
     // Local network control (lib/frameTv.js): every configured Frame TV.
     const frame = require('../frameTv');
-    const keyFor = { mute: 'KEY_MUTE', home: 'KEY_HOME', hdmi: 'KEY_HDMI' };
+    const keyFor = { mute: 'KEY_MUTE', home: 'KEY_HOME', hdmi: 'KEY_HDMI', play: 'KEY_PLAY', pause: 'KEY_PAUSE' };
     const out = [];
     for (const tv of frame.configured()) {
       try {
@@ -318,6 +318,11 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
           const up = !String(args.value || '').startsWith('-');
           for (let i = 0; i < steps; i++) await frame.sendKey(tv, up ? 'KEY_VOLUP' : 'KEY_VOLDOWN');
           out.push(`${tv.name}: volume ${up ? 'up' : 'down'} ${steps}`);
+        } else if (args.action === 'open_app') {
+          if (!args.value) { out.push(`${tv.name}: which app?`); continue; }
+          await frame.powerOn(tv);
+          await frame.ensureArtMode(tv, false).catch(() => {});
+          out.push(`${tv.name}: opened ${await frame.launchApp(tv, args.value)}`);
         } else if (keyFor[args.action]) { await frame.sendKey(tv, keyFor[args.action]); out.push(`${tv.name}: ${args.action}`); }
         else out.push(`${tv.name}: "${args.action}" isn't supported`);
       } catch (err) { out.push(`${tv.name}: ${err.message}`); }
@@ -325,61 +330,6 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     return out.join('. ');
   }
 
-  if (toolName === 'control_tv') {
-    try {
-      const token = await getSmartThingsToken();
-      if (!token) return 'SmartThings not connected. Josh needs to add a token.';
-
-      // Find Frame TV device
-      const devicesRes = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const frameTV = devicesRes.data.items?.find(d =>
-        d.label?.toLowerCase().includes('frame') &&
-        d.components?.[0]?.capabilities?.some(c => c.id === 'samsungvd.mediaInputSource')
-      );
-      if (!frameTV) return 'No Samsung Frame TV found on SmartThings.';
-
-      const deviceId = frameTV.deviceId;
-      const sendCmd = (capability, command, cmdArgs = []) =>
-        axios.post(`${SMARTTHINGS_BASE_URL}/devices/${deviceId}/commands`,
-          { commands: [{ capability, command, arguments: cmdArgs }] },
-          { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
-        );
-
-      if (args.action === 'on') {
-        await sendCmd('switch', 'on');
-        return 'TV powered on.';
-      } else if (args.action === 'off') {
-        await sendCmd('switch', 'off');
-        return 'TV powered off.';
-      } else if (args.action === 'art_mode_on') {
-        await sendCmd('samsungvd.ambient', 'on');
-        return 'Art mode enabled.';
-      } else if (args.action === 'art_mode_off') {
-        await sendCmd('samsungvd.ambient', 'off');
-        return 'Art mode disabled.';
-      } else if (args.action === 'mute') {
-        await sendCmd('audioMute', 'mute');
-        return 'TV muted.';
-      } else if (args.action === 'volume') {
-        const level = parseInt(args.value) || 20;
-        await sendCmd('audioVolume', 'setVolume', [level]);
-        return `TV volume set to ${level}.`;
-      } else if (args.action === 'hdmi') {
-        const input = `HDMI${args.value || '1'}`;
-        await sendCmd('samsungvd.mediaInputSource', 'setInputSource', [input]);
-        return `TV switched to ${input}.`;
-      } else if (args.action === 'home') {
-        await sendCmd('samsungvd.remoteControl', 'send', ['HOME']);
-        return 'TV navigated to home screen.';
-      }
-
-      return `Unknown TV action: ${args.action}`;
-    } catch (err) {
-      return `TV control failed: ${err.message}`;
-    }
-  }
   if (toolName === 'get_news') return 'News headlines not currently available.';
   if (toolName === 'get_calendar') return 'Calendar access not available in this context.';
 

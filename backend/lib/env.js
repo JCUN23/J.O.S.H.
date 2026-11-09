@@ -8,7 +8,6 @@ const INTEGRATIONS = [
   { name: 'Microsoft Calendar', all: ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'] },
   { name: 'Govee', all: ['GOVEE_API_KEY'] },
   { name: 'Philips Hue', all: ['HUE_BRIDGE_IP', 'HUE_USERNAME'] },
-  { name: 'SmartThings', any: [['SMARTTHINGS_CLIENT_ID', 'SMARTTHINGS_CLIENT_SECRET'], ['SMARTTHINGS_TOKEN']] },
   { name: 'Sentinel AI (Groq)', all: ['GROQ_API_KEY'] },
   { name: 'Anthropic chat', all: ['ANTHROPIC_API_KEY'] },
   { name: 'ElevenLabs TTS', all: ['ELEVENLABS_API_KEY'] },

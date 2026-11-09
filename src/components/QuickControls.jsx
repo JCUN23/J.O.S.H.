@@ -1,14 +1,22 @@
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
-import { Music, Lightbulb, Cpu, TrendingUp, UserCheck } from 'lucide-react';
+import { Lightbulb, LightbulbOff, UserCheck, Loader2 } from 'lucide-react';
 import FaceManagement from './AuthAndProfiles/FaceManagement';
-import BluetoothWidget from "./BluetoothWidget";
+import { allLights } from '../utils/sentinelLocal';
 
-// Quick Controls Component
+// Quick Controls: every light on/off (Govee + Hue, the same path Alfred uses) and face lock.
 const QuickControls = ({ theme }) => {
-
     const [showFaceManagement, setShowFaceManagement] = useState(false);
-    const [showBluetooth, setShowBluetooth] = useState(false);
+    const [busy, setBusy] = useState(null);       // 'on' | 'off'
+    const [msg, setMsg] = useState('');
+
+    const lights = async (on) => {
+        setBusy(on ? 'on' : 'off'); setMsg('');
+        const r = await allLights(on, ['']);
+        setMsg(r.response);
+        setBusy(null);
+    };
+    const tile = `bg-black/50 border border-${theme}-800 rounded p-4 hover:border-${theme}-600 hover:bg-${theme}-900/20 transition-all disabled:opacity-50`;
 
     return (
         <>
@@ -18,21 +26,23 @@ const QuickControls = ({ theme }) => {
                     <h3 className={`text-lg font-semibold text-${theme}-400`}>QUICK CONTROLS</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                    <button className={`bg-black/50 border border-${theme}-800 rounded p-4 hover:border-${theme}-600 hover:bg-${theme}-900/20 transition-all"}`}>
-                        <Cpu size={24} className={`mx-auto mb-2 text-${theme}-400`} />
-                        <div className={`text-${theme}-700 text-sm`}>Arduino</div>
-                        <div className={`text-${theme}-700`}>Not Connected</div>
+                    <button onClick={() => lights(true)} disabled={!!busy} className={tile}>
+                        {busy === 'on' ? <Loader2 size={24} className={`mx-auto mb-2 animate-spin text-${theme}-400`} /> : <Lightbulb size={24} className={`mx-auto mb-2 text-${theme}-400`} />}
+                        <div className={`text-sm text-${theme}-400`}>All lights</div>
+                        <div className={`text-xs text-${theme}-700`}>On</div>
                     </button>
-                    {/* Face Management */}
-                    <button
-                        onClick={() => setShowFaceManagement(true)}
-                        className={`bg-black/50 border border-${theme}-800 rounded p-4 hover:border-${theme}-600 hover:bg-${theme}-900/20 transition-all`}
-                    >
+                    <button onClick={() => lights(false)} disabled={!!busy} className={tile}>
+                        {busy === 'off' ? <Loader2 size={24} className={`mx-auto mb-2 animate-spin text-${theme}-400`} /> : <LightbulbOff size={24} className={`mx-auto mb-2 text-${theme}-400`} />}
+                        <div className={`text-sm text-${theme}-400`}>All lights</div>
+                        <div className={`text-xs text-${theme}-700`}>Off</div>
+                    </button>
+                    <button onClick={() => setShowFaceManagement(true)} className={`${tile} col-span-2`}>
                         <UserCheck size={24} className={`mx-auto mb-2 text-${theme}-400`} />
                         <div className={`text-sm text-${theme}-400`}>Face Lock</div>
                         <div className={`text-xs text-${theme}-700`}>Settings</div>
                     </button>
                 </div>
+                {msg && <div className={`mt-3 text-xs text-${theme}-500`} role="status">{msg}</div>}
             </div>
 
             {showFaceManagement && (
@@ -40,13 +50,6 @@ const QuickControls = ({ theme }) => {
                 // containing block (backdrop-filter/transform on ancestors would trap position: fixed).
                 createPortal(<FaceManagement onClose={() => setShowFaceManagement(false)} onRegistered={() => setShowFaceManagement(false)} />, document.body)
             )}
-            {showBluetooth && (
-                <BluetoothWidget
-                    theme={theme}
-                    onClose={() => setShowBluetooth(false)}
-                />
-            )}
-
         </>
     );
 };

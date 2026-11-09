@@ -71,12 +71,12 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "control_tv",
-      description: "Control the Samsung Frame TV — power, art mode, volume, mute, HDMI input, home screen",
+      description: "Control the Samsung Frame TV (The Frame): power, art mode, open an app (YouTube, Netflix, ESPN, Peacock, HBO Max, Fubo, Spotify...), volume, mute, play/pause, HDMI input, home screen",
       parameters: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["on", "off", "art_mode_on", "art_mode_off", "mute", "volume", "hdmi", "home"], description: "The action to perform" },
-          value: { type: "string", description: "For volume: steps to move, e.g. '5' louder or '-5' quieter. For hdmi: 1-4" }
+          action: { type: "string", enum: ["on", "off", "art_mode_on", "art_mode_off", "mute", "volume", "hdmi", "home", "open_app", "play", "pause"], description: "The action to perform" },
+          value: { type: "string", description: "For open_app: the app name. For volume: steps to move, e.g. '5' louder or '-5' quieter. For hdmi: 1-4" }
         },
         required: ["action"]
       }

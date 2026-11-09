@@ -55,7 +55,7 @@ const useAuthTokens = () => {
     return tokens;
 };
 
-const SystemStatus = ({ theme, isSpotifyConnected, isNewsConnected, isGoveeConnected, isSmartThingsConnected, isHueConnected }) => {
+const SystemStatus = ({ theme, isSpotifyConnected, isNewsConnected, isGoveeConnected, isHueConnected }) => {
     const health = useBackendHealth();
     const tokens = useAuthTokens();
 
@@ -79,12 +79,9 @@ const SystemStatus = ({ theme, isSpotifyConnected, isNewsConnected, isGoveeConne
         ['SPOTIFY', authed(isSpotifyConnected)],
         ['CALENDAR', authed(tokens.calendar)],
         ['NEWS', connected(isNewsConnected)],
-        ['SMARTTHINGS', connected(isSmartThingsConnected)],
         ['GOVEE', connected(isGoveeConnected)],
         ['HUE', connected(isHueConnected)],
         ['3D PRINTER', ['info', 'VIA CLOUD']],
-        ['ARDUINO', ['off', 'OFFLINE']],
-        ['BLUETOOTH', ['off', 'OFFLINE']],
     ];
 
     const renderItems = (copy) =>

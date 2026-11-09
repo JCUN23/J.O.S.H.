@@ -50,7 +50,6 @@ app.use(require('./routes/quotes'));
 app.use(require('./routes/news'));
 app.use(require('./routes/govee'));
 app.use(require('./routes/creality'));
-app.use(require('./routes/smartthings'));
 app.use(require('./routes/frametv'));
 app.use(require('./routes/home'));
 app.use(require('./routes/gameday'));

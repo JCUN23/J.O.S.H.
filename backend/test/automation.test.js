@@ -6,14 +6,17 @@ const { mockModules, tempStores, startApp } = require('./helpers');
 
 const dir = tempStores();
 for (const k of ['ACTIVITY', 'SCENES', 'RULES', 'GAMEDAY']) process.env[`${k}_STORE_PATH`] = path.join(dir, `${k.toLowerCase()}.json`);
-Object.assign(process.env, { GOVEE_API_KEY: 'k', HUE_BRIDGE_IP: '10.0.0.2', HUE_USERNAME: 'u', SMARTTHINGS_TOKEN: 'PAT' });
+Object.assign(process.env, { GOVEE_API_KEY: 'k', HUE_BRIDGE_IP: '10.0.0.2', HUE_USERNAME: 'u' });
 process.env.HUE_LIGHTS = '*';   // scene actions here; the Go-only filter has its own test (hueLights.test.js)
 delete process.env.HOME_LAT; delete process.env.HOME_LON;
 
 process.env.GOVEE_GAP_MS = '0';
 const sent = { govee: [], hue: [], tv: [] };
 let goveeReply = null;   // (body, attempt) => response | throws; default OK
-mockModules({ axios: {
+mockModules({ './frameTv': {
+  configured: () => [{ id: 'office', name: 'Office', host: '10.0.0.35' }],
+  apply: async (opts) => { sent.tv.push(opts); return 'TV Office: art mode on'; },
+}, axios: {
   get: async (url) => url.includes('govee')
     ? { data: { data: { devices: [
         { device: 'rope', model: 'H61A2', supportCmds: ['turn', 'brightness', 'color', 'colorTem'] },
@@ -29,7 +32,6 @@ mockModules({ axios: {
     if (url.includes('govee') && goveeReply) return goveeReply(body);
     return { data: { code: 200 } };
   },
-  post: async (url, body) => { sent.tv.push(`${url.match(/devices\/([^/]+)/)[1]}:${body.commands[0].capability}:${body.commands[0].command}`); return { data: {} }; },
 } });
 const reset = () => { sent.govee = []; sent.hue = []; sent.tv = []; };
 const quiet = () => { const o = [console.log, console.warn]; console.log = console.warn = () => {}; return () => { [console.log, console.warn] = o; }; };
@@ -66,7 +68,7 @@ test('actions: color goes only to color-capable lights, Hue gets all-lights grou
   assert.equal(sent.hue[0].body.on, true); assert.equal(sent.hue[0].body.bri, 114);
 });
 
-test('actions: off turns everything off; kelvin maps to colorTem / Hue mireds; TV only targets Frame TVs', async () => {
+test('actions: off turns everything off; kelvin maps to colorTem / Hue mireds; TV goes to the local Frame TV', async () => {
   reset();
   await runActions([{ type: 'lights', on: false }]);
   assert.deepEqual(sent.govee.map((b) => b.cmd), [{ name: 'turn', value: 'off' }, { name: 'turn', value: 'off' }, { name: 'turn', value: 'off' }]);
@@ -75,7 +77,7 @@ test('actions: off turns everything off; kelvin maps to colorTem / Hue mireds; T
   await runActions([{ type: 'lights', kelvin: 2700 }, { type: 'tv', artMode: true }]);
   assert.deepEqual(sent.govee.map((b) => b.cmd), [{ name: 'colorTem', value: 2700 }]);
   assert.equal(sent.hue[0].body.ct, 370);
-  assert.deepEqual(sent.tv, ['tv1:samsungvd.ambient:on']);
+  assert.deepEqual(sent.tv, [{ type: 'tv', artMode: true }]);
 });
 
 test('govee: failures name the device and reason; a 429 is retried once', async () => {

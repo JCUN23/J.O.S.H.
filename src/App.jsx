@@ -26,11 +26,9 @@ import { getCachedFaces, syncFaces, FACES_CHANGED } from "./utils/faceStore";
 import { ProfileProvider } from './components/AuthAndProfiles/ProfileContext';
 import { useProfile } from './components/AuthAndProfiles/ProfileContext';
 import OnboardingScreen from './components/AuthAndProfiles/OnboardingScreen';
-import BluetoothWidget from './components/BluetoothWidget';
 import GoveeWidget from './components/GoveeWidget';
 import DraggableGrid from './components/DraggableGrid';
 import BambuPrinterWidget from './components/BambuPrinterWidget';
-import SmartThingsWidget from './components/SmartThingsWidget';
 import PhilipsHueWidget from './components/PhillipsHueWidget';
 import { processCommand } from './utils/sentinelLocal';
 import { forSpeech } from './utils/speech';
@@ -51,7 +49,6 @@ const BatcomputerHub = () => {
   const [quoteAuthor, setQuoteAuthor] = useState('');
   const [isNewsOnline, setNewsIsOnline] = useState(false);
   const [goveeIsConnected, setGoveeIsConnected] = useState(false);
-  const [smartThingsIsConnected, setSmartThingsIsConnected] = useState(false);
   const [hueIsConnected, setHueIsConnected] = useState(false);
 
   // Wake word detection state
@@ -108,9 +105,7 @@ const BatcomputerHub = () => {
       quickControls: true,
       spotify: true,
       news: true,
-      smartThings: true,
       govee: true,
-      bluetooth: true,
       printer: true,
       hue: true,
       scenes: true,
@@ -149,26 +144,6 @@ const BatcomputerHub = () => {
 
     // Google's callback is handled by CalendarWidget; don't fall through into Spotify below.
     if (state === 'google_calendar') return;
-
-    // SmartThings OAuth: the server exchanges the code and keeps the login.
-    if (state === 'smartthings_auth') {
-      window.history.replaceState({}, "", "/");
-      // OAuth codes are single-use; StrictMode runs effects twice in dev.
-      if (sessionStorage.getItem("smartthings_code_exchanged") === code) return;
-      sessionStorage.setItem("smartthings_code_exchanged", code);
-
-      fetch(`${BACKEND_URL}/auth/smartthings/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-      })
-        .then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          window.dispatchEvent(new Event('sentinel:smartthings-connected'));
-        })
-        .catch(err => console.error("SmartThings auth failed:", err));
-      return;
-    }
 
     // Handle Spotify OAuth
     if (sessionStorage.getItem("spotify_code_exchanged")) {
@@ -925,7 +900,7 @@ const BatcomputerHub = () => {
     <p>{quoteText}<a> - {quoteAuthor}</a></p>
   </div>
 
-  const spotifyTab = <div
+  const spotifyTab = <div key="spotify"
     className={`bg-${theme}-950/30 border border-${theme}-800 rounded-lg p-3 min-h-[300px]`}>
     <div className="flex items-center gap-2 mb-2" onClick={() => setShowSpotifyModal(true)} style={{ cursor: 'pointer' }}>
       <Music size={20} className={`text-${theme}-400`} />
@@ -1004,7 +979,7 @@ const BatcomputerHub = () => {
 
           {/* Fixed Top Section - Always visible */}
           <div className="hud-stack mb-4 space-y-4 lg:mb-2 lg:space-y-2">
-            <SystemStatus theme={theme} isSpotifyConnected={token} isNewsConnected={isNewsOnline} isGoveeConnected={goveeIsConnected} isSmartThingsConnected={smartThingsIsConnected} isHueConnected={hueIsConnected} />
+            <SystemStatus theme={theme} isSpotifyConnected={token} isNewsConnected={isNewsOnline} isGoveeConnected={goveeIsConnected} isHueConnected={hueIsConnected} />
             {quoteTab}
             <VoiceAssistant
               listening={listening}
@@ -1023,24 +998,20 @@ const BatcomputerHub = () => {
           </div>
 
           <DraggableGrid theme={theme} editMode={layoutEditing} onEditModeChange={setLayoutEditing}>
-            {widgetVisibility.weather && <WeatherWidget theme={theme} />}
-            {widgetVisibility.sports && <SportsWidget theme={theme} />}
-            {widgetVisibility.calendar && <CalendarWidget theme={theme} />}
-            {widgetVisibility.quickControls && <QuickControls theme={theme} />}
+            {/* Each widget carries its grid key: DraggableGrid places widgets by key, so
+                adding or removing one never shifts the others' saved positions. */}
+            {widgetVisibility.weather && <WeatherWidget key="weather" theme={theme} />}
+            {widgetVisibility.sports && <SportsWidget key="sports" theme={theme} />}
+            {widgetVisibility.calendar && <CalendarWidget key="calendar" theme={theme} />}
+            {widgetVisibility.quickControls && <QuickControls key="quickcontrols" theme={theme} />}
             {widgetVisibility.spotify && spotifyTab}
-            {widgetVisibility.news && <NewsWidget theme={theme} setNewsIsOnline={setNewsIsOnline} />}
-            {widgetVisibility.smartThings && <SmartThingsWidget
-              theme={theme}
-              setSmartThingsIsConnected={setSmartThingsIsConnected}
-            />}
-            {widgetVisibility.govee && <GoveeWidget theme={theme} setGoveeIsConnected={setGoveeIsConnected} />}
-            {widgetVisibility.bluetooth && <BluetoothWidget theme={theme} />}
-            {widgetVisibility.printer && <BambuPrinterWidget theme={theme} />}
-            {widgetVisibility.hue && <PhilipsHueWidget theme={theme} setHueIsConnected={setHueIsConnected} />}
-            {/* New widgets go at the END: DraggableGrid maps children to WIDGET_KEYS by position */}
-            {widgetVisibility.scenes && <ScenesWidget theme={theme} />}
-            {widgetVisibility.activity && <ActivityWidget theme={theme} />}
-            {widgetVisibility.frametv && <FrameTvWidget theme={theme} />}
+            {widgetVisibility.news && <NewsWidget key="news" theme={theme} setNewsIsOnline={setNewsIsOnline} />}
+            {widgetVisibility.govee && <GoveeWidget key="govee" theme={theme} setGoveeIsConnected={setGoveeIsConnected} />}
+            {widgetVisibility.printer && <BambuPrinterWidget key="crealityprinter" theme={theme} />}
+            {widgetVisibility.hue && <PhilipsHueWidget key="phillips_hue" theme={theme} setHueIsConnected={setHueIsConnected} />}
+            {widgetVisibility.scenes && <ScenesWidget key="scenes" theme={theme} />}
+            {widgetVisibility.activity && <ActivityWidget key="activity" theme={theme} />}
+            {widgetVisibility.frametv && <FrameTvWidget key="frametv" theme={theme} />}
           </DraggableGrid>
         </div>
 

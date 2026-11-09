@@ -3,7 +3,6 @@
 // a failing integration never throws past this module.
 const axios = require('axios');
 const { GOVEE_API_KEY, GOVEE_BASE_URL, HUE_BRIDGE_IP, HUE_USERNAME } = require('./config');
-const { SMARTTHINGS_BASE_URL, getSmartThingsToken } = require('./smartthings');
 const { rgbToHueBridgeHSB } = require('./color');
 
 // H6076 lists color/brightness but ignores them via the API (see goveeCapabilities.js)
@@ -137,42 +136,12 @@ async function hueApply({ on, brightness, color, colorFor, kelvin, lightIds }) {
   return errs.length ? `Hue: failed: ${errs.join('; ')}` : `Hue: all lights ${state.on ? 'set' : 'off'}`;
 }
 
-async function frameTvs() {
-  const token = await getSmartThingsToken();
-  if (!token) return { token: null, tvs: [] };
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const { data } = await axios.get(`${SMARTTHINGS_BASE_URL}/devices`, { headers });
-  const tvs = (data.items || []).filter((d) => d.label?.toLowerCase().includes('frame')
-    && d.components?.[0]?.capabilities?.some((c) => c.id === 'samsungvd.mediaInputSource'));
-  const send = (tv, capability, command, args = []) => axios.post(`${SMARTTHINGS_BASE_URL}/devices/${tv.deviceId}/commands`,
-    { commands: [{ capability, command, arguments: args }] }, { headers });
-  return { token, tvs, send };
-}
-
-
-// { power: true|false, artMode: true|false, home: true }
-// Local network control (lib/frameTv.js) when FRAME_TVS is set; SmartThings cloud otherwise.
+// Frame TVs on the local network (lib/frameTv.js). SmartThings was dropped: its API
+// now needs a paid plan for apps like this one.
 async function tvApply(opts) {
   const frame = require('./frameTv');
-  if (frame.configured().length) return frame.apply(opts);
-  return smartThingsTvApply(opts);
-}
-
-async function smartThingsTvApply({ power, artMode, home, only }) {
-  const { token, tvs: all, send } = await frameTvs();
-  if (!token) return 'TV: SmartThings not connected';
-  const tvs = only ? all.filter((tv) => nameMatcher(only)(tv.label, tv.name)) : all;
-  if (!all.length) return 'TV: no Frame TV found';
-  if (!tvs.length) return `TV: no TV matched "${only}" (have: ${all.map((tv) => tv.label || tv.name).join(', ')})`;
-  await Promise.all(tvs.map(async (tv) => {
-    if (artMode === false) await send(tv, 'samsungvd.ambient', 'off');
-    if (power === true) await send(tv, 'switch', 'on');
-    if (power === false) await send(tv, 'switch', 'off');
-    if (artMode === true) await send(tv, 'samsungvd.ambient', 'on');
-    if (home) { await delay(2000); await send(tv, 'samsungvd.remoteControl', 'send', ['HOME']); }
-  }));
-  const what = [power === true && 'on', power === false && 'off', artMode === true && 'art mode', artMode === false && 'art off', home && 'home screen'].filter(Boolean).join(', ');
-  return `TV: ${tvs.length} ${tvs.length === 1 ? 'TV' : 'TVs'} ${what}`;
+  if (!frame.configured().length) return 'TV: none configured (FRAME_TVS)';
+  return frame.apply(opts);
 }
 
 module.exports = { nameMatcher, goveeApply, hueApply, tvApply, goveeDevices, delay };

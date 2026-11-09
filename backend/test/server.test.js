@@ -25,12 +25,12 @@ test('server boots and wires all routes', async (t) => {
   })(app.router.stack);
 
   for (const r of ['GET /api/health', 'GET /auth/status', 'GET /api/faces', 'PUT /api/faces', 'GET /api/hue/lights',
-    'POST /api/govee/control', 'GET /api/stoic', 'POST /api/sentinel/chat', 'POST /auth/smartthings/token',
+    'POST /api/govee/control', 'GET /api/stoic', 'POST /api/sentinel/chat',
     'GET /auth/spotify/access-token', 'GET /auth/google/access-token', 'POST /api/game-day']) {
     assert.ok(routes.includes(r), `missing route ${r}`);
   }
-  // 48 today; a big drop means a router stopped being mounted
-  assert.ok(routes.length >= 45, `only ${routes.length} routes registered`);
+  // a big drop means a router stopped being mounted
+  assert.ok(routes.length >= 40, `only ${routes.length} routes registered`);
 
   // unknown API routes get JSON, not the SPA's HTML
   const s = await new Promise((r) => { const srv = require('http').createServer(app).listen(0, () => r(srv)); });

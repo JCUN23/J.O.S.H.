@@ -18,7 +18,7 @@ function innerScroller(el, stop) {
 
 const WIDGET_KEYS = [
     'weather', 'sports', 'calendar', 'quickcontrols',
-    'spotify', 'news', 'smartthings', 'govee', 'bluetooth',
+    'spotify', 'news', 'govee',
     'crealityprinter', 'phillips_hue',   // 'crealityprinter' slot holds the Bambu printer widget
     'scenes', 'activity', 'frametv'
 ];
@@ -88,11 +88,13 @@ const DraggableGrid = ({ children, theme = 'cyan', editMode: editModeProp, onEdi
         return arr.filter(widget => widget != null);
     }, [children]);
 
-    // Create a map of widget key to widget component
+    // Widget key -> widget. Children say which slot they are with their React key
+    // (key="weather"); unkeyed children fall back to their position in WIDGET_KEYS.
     const widgetMap = useMemo(() => {
         const map = {};
         widgets.forEach((widget, index) => {
-            const key = WIDGET_KEYS[index];
+            const own = widget && typeof widget === 'object' && widget.key != null ? String(widget.key) : null;
+            const key = own && WIDGET_KEYS.includes(own) ? own : WIDGET_KEYS[index];
             if (key) map[key] = widget;
         });
         return map;
