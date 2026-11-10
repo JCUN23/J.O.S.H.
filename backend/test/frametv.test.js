@@ -17,6 +17,7 @@ const httpSrv = http.createServer((req, res) => {
     let body = ''; req.on('data', (c) => { body += c; });
     req.on('end', () => {
       if (!tv.upnp) { res.statusCode = 500; res.end(); return; }
+      if (body.includes('GetMute')) { res.end(`<CurrentMute>${tv.muted ? 1 : 0}</CurrentMute>`); return; }
       tv.muted = /<DesiredMute>1</.test(body); res.end('<ok/>');
     });
     return;
@@ -275,6 +276,27 @@ test('nameMatcher: includes, excludes, case-insensitive', () => {
   assert.equal(m('LR Left'), false);
   assert.equal(m(undefined), false);
   assert.equal(nameMatcher('')('anything'), true);
+});
+
+test('ducking: wake mutes a playing TV, restores only what it muted (Nov 9: TV louder than Josh)', async () => {
+  tv.upnp = true; tv.muted = false;
+  assert.equal(await frame.duck(), true);
+  assert.equal(tv.muted, true, 'muted for the command');
+  await frame.unduck();
+  assert.equal(tv.muted, false, 'sound back after');
+  // already muted (Game Day, or by hand): not ours, never unmuted
+  tv.muted = true;
+  assert.equal(await frame.duck(), false);
+  await frame.unduck();
+  assert.equal(tv.muted, true);
+  // the command itself muted the TV ("mute the TV"): stays muted
+  tv.muted = false;
+  await frame.duck();
+  await new Promise((r) => setTimeout(r, 5));
+  await frame.setMute(frame.find('office'), true);
+  await frame.unduck();
+  assert.equal(tv.muted, true, 'the command wins');
+  tv.muted = false;
 });
 
 test('HTTP routes', async (t) => {

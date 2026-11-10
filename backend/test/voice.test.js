@@ -82,7 +82,7 @@ test('with a panel open: wake shows listening, the cleaned transcript goes to th
   const panel = await stream(app.base, true);
   t.after(async () => { panel.close(); T.reset(); await app.close(); });
   const w = await app.call('POST', '/api/voice/wake', {}, { 'X-Voice-Token': 'vt' });
-  assert.deepEqual(w.body, { listen: true, panels: 1 });
+  assert.deepEqual(w.body, { listen: true, panels: 1, ducked: false });
   await panel.waitFor('wake');
   const r = await postWav(app.base, WAV);
   assert.deepEqual(r.body, { text: 'turn off the lights.', handledBy: 'panel' });
@@ -160,7 +160,7 @@ test('follow-up listening: allowed after Alfred finishes talking, not after musi
   assert.deepEqual((await app.call('POST', '/api/voice/followup', {}, pi)).body, { listen: false, why: 'panel is speaking' });
 
   await app.call('POST', '/api/voice/speaking', { speaking: false });
-  assert.deepEqual((await app.call('POST', '/api/voice/followup', {}, pi)).body, { listen: true });
+  assert.deepEqual((await app.call('POST', '/api/voice/followup', {}, pi)).body, { listen: true, ducked: false });
   assert.equal((await panel.waitFor('wake')).followup, true);
 
   // silence in the follow-up window: 'idle' (no "didn't catch that")

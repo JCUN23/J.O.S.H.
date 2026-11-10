@@ -125,3 +125,10 @@ class FollowUpTest(unittest.TestCase):
         v, t = run(L.Endpointer(60, start_timeout=6.0), frames((10, 50)))
         self.assertEqual(v, 'nothing')
         self.assertAlmostEqual(t, 6.0, delta=0.1)
+
+
+class SpeechOverTv(unittest.TestCase):
+    def test_normal_voice_counts_at_twice_the_room(self):
+        # Nov 9: room 300 with the TV on, Josh talking at ~700 - missed at 3x, heard at 2x
+        self.assertEqual(run(L.Endpointer(300), frames((0.3, 300), (1.2, 700), (1.5, 300)))[0], 'done')
+        self.assertEqual(run(L.Endpointer(300, ratio=3.0), frames((0.3, 300), (1.2, 700), (5, 300)))[0], 'nothing')

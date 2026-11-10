@@ -324,7 +324,9 @@ async function ensureArtMode(tv, on) {
 // ---------- mute ----------
 // UPnP sets mute to an explicit state. KEY_MUTE only toggles, so it's the fallback, and
 // we say so: if the TV was already muted, a toggle unmutes it.
+const muteTouched = {};   // tv.id -> when a command (not ducking) last set mute
 async function setMute(tv, on) {
+  muteTouched[tv.id] = Date.now();
   const body = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:SetMute xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>${on ? 1 : 0}</DesiredMute></u:SetMute></s:Body></s:Envelope>`;
   try {
     await axios.post(`http://${tv.host}:${opt().dmrPort}/upnp/control/RenderingControl1`, body, {
@@ -337,6 +339,45 @@ async function setMute(tv, on) {
     return 'mute toggled (TV wouldn\'t set mute directly; press mute if it\'s now loud)';
   }
 }
+
+// ---------- ducking ----------
+// The TV sits closer to the Pi mic than whoever is talking (Nov 9: had to shout over
+// YouTube). On the wake word, mute every TV that's playing sound; afterwards unmute
+// only what WE muted, and only if no command touched mute in between ("mute the TV",
+// Game Day). UPnP only: KEY_MUTE toggles blindly, so it's never used for this.
+const upnp = (tv, action, args, timeout) => axios.post(`http://${tv.host}:${opt().dmrPort}/upnp/control/RenderingControl1`,
+  `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:${action} xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel>${args}</u:${action}></s:Body></s:Envelope>`,
+  { timeout, headers: { 'Content-Type': 'text/xml; charset="utf-8"', SOAPACTION: `"urn:schemas-upnp-org:service:RenderingControl:1#${action}"` } });
+
+async function getMute(tv, timeout = 700) {
+  try {
+    const { data } = await upnp(tv, 'GetMute', '', timeout);
+    const m = /<CurrentMute>(\d)<\/CurrentMute>/.exec(String(data));
+    return m ? m[1] === '1' : null;
+  } catch { return null; }    // off, asleep, or no UPnP
+}
+
+const ducked = {};   // tv.id -> when we muted it
+async function duck() {
+  const done = await Promise.all(configured().map(async (tv) => {
+    if (ducked[tv.id]) return true;                       // still ducked from this conversation
+    if ((await getMute(tv)) !== false) return false;      // already muted, off, or unknown
+    try { await upnp(tv, 'SetMute', '<DesiredMute>1</DesiredMute>', 700); ducked[tv.id] = Date.now(); return true; }
+    catch { return false; }
+  }));
+  return done.some(Boolean);
+}
+
+async function unduck() {
+  for (const tv of configured()) {
+    const at = ducked[tv.id];
+    if (!at) continue;
+    delete ducked[tv.id];
+    if ((muteTouched[tv.id] || 0) > at) continue;         // a command set mute since: leave it
+    try { await upnp(tv, 'SetMute', '<DesiredMute>0</DesiredMute>', 2000); } catch { /* TV went off */ }
+  }
+}
+const isDucked = () => Object.keys(ducked).length > 0;
 
 // REST info: null means unreachable (fully off, or network standby disabled).
 async function info(tv) {
@@ -477,4 +518,4 @@ const KEYS = ['KEY_VOLUP', 'KEY_VOLDOWN', 'KEY_MUTE', 'KEY_HOME', 'KEY_RETURN', 
 
 const _resetApproval = () => { for (const k of Object.keys(needsApproval)) delete needsApproval[k]; };
 
-module.exports = { _resetApproval, configured, find, status, pair, sendKey, getArtMode, setArtMode, ensureArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KNOWN_APPS, KEYS };
+module.exports = { duck, unduck, isDucked, getMute, _resetApproval, configured, find, status, pair, sendKey, getArtMode, setArtMode, ensureArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KNOWN_APPS, KEYS };

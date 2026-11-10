@@ -86,10 +86,30 @@ router.post('/api/voice/heartbeat', fromPi, (req, res) => {
 
 // Wake word heard. Tell the panel to show "listening" right away, unless Sentinel is
 // talking (its own voice must not wake it).
-router.post('/api/voice/wake', fromPi, (req, res) => {
+// Ducking: the TV is muted from the wake word until the conversation is over, then
+// restored (see frameTv.duck). Every voice step pushes the restore out; the waits below
+// cover Alfred's reply and the follow-up window. VOICE_DUCK_TV=off turns it off.
+let restoreTimer = null;
+function restoreTvIn(ms) {
+  if (!restoreTimer && !require('../lib/frameTv').isDucked()) return;
+  clearTimeout(restoreTimer);
+  restoreTimer = setTimeout(() => { restoreTimer = null; require('../lib/frameTv').unduck().catch(() => {}); }, ms);
+  restoreTimer.unref?.();
+}
+async function duckTv() {
+  if (process.env.VOICE_DUCK_TV === 'off') return false;
+  const frame = require('../lib/frameTv');
+  if (!frame.configured().length) return false;
+  const ducked = await Promise.race([frame.duck().catch(() => false), new Promise((r) => setTimeout(() => r(false), 1200))]);
+  if (ducked) restoreTvIn(25_000);
+  return ducked;
+}
+
+router.post('/api/voice/wake', fromPi, async (req, res) => {
   if (Date.now() < speakingUntil) return res.json({ listen: false, why: 'panel is speaking' });
   broadcast({ type: 'wake' });
-  res.json({ listen: true, panels: panelCount() });
+  const ducked = await duckTv();
+  res.json({ listen: true, panels: panelCount(), ducked });
 });
 
 router.post('/api/voice/utterance', fromPi, express.raw({ type: () => true, limit: '5mb' }), async (req, res) => {
@@ -104,6 +124,7 @@ router.post('/api/voice/utterance', fromPi, express.raw({ type: () => true, limi
   }
   const followup = req.query.followup === '1';
   if (!text) {
+    restoreTvIn(800);   // conversation over: sound back on
     // Silence after a follow-up window is normal: end it quietly, no "didn't catch that"
     broadcast({ type: followup ? 'idle' : 'nothing' });
     return res.json({ text: '', handledBy: null });
@@ -131,6 +152,8 @@ router.post('/api/voice/speaking', (req, res) => {
   speakingUntil = req.body?.speaking ? Date.now() + SPEAKING_MAX_MS : 0;
   if (req.body?.speaking) followupOk = true;
   else if (req.body?.followup === false) followupOk = false;
+  // Reply started: hold the duck while he talks. Finished: room for the follow-up window.
+  restoreTvIn(req.body?.speaking ? SPEAKING_MAX_MS + 5000 : (followupOk && process.env.VOICE_FOLLOWUP !== 'off' ? 9000 : 1000));
   res.json({ ok: true });
 });
 
@@ -141,7 +164,8 @@ router.post('/api/voice/followup', fromPi, (req, res) => {
   if (Date.now() < speakingUntil) return res.json({ listen: false, why: 'panel is speaking' });
   if (!followupOk) return res.json({ listen: false, why: 'music is playing' });
   broadcast({ type: 'wake', followup: true });
-  res.json({ listen: true });
+  restoreTvIn(15_000);
+  res.json({ listen: true, ducked: require('../lib/frameTv').isDucked() });
 });
 
 router.get('/api/voice/status', (req, res) => {

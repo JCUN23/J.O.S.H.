@@ -20,6 +20,8 @@ Settings come from /opt/sentinel/backend/.env (environment variables win):
   VOICE_MIC          name fragment or index of the input device (default: first USB mic)
   VOICE_SPEAKER      auto (first USB speaker) | none | an ALSA device like plughw:2,0
   VOICE_MIN_LEVEL    60     lowest loudness that counts as speech (quiet mics)
+  VOICE_SPEECH_RATIO 2.0    speech must be this many times the room's noise (was 3: had to shout)
+  VOICE_DUCK_ROOM    120    room level to assume once the backend has muted the TV
   VOICE_FOLLOWUP_SECONDS 6  after Alfred answers, listen this long without the wake word (0 = off)
   VOICE_BACKEND      http://127.0.0.1:3001
 """
@@ -84,6 +86,8 @@ class Config:
         self.max_s = float(get('VOICE_MAX_SECONDS', '10'))
         self.end_silence = float(get('VOICE_END_SILENCE', '1.0'))
         self.min_level = float(get('VOICE_MIN_LEVEL', '60'))
+        self.speech_ratio = float(get('VOICE_SPEECH_RATIO', '2.0'))
+        self.duck_room = float(get('VOICE_DUCK_ROOM', '120'))
         self.followup_s = float(get('VOICE_FOLLOWUP_SECONDS', '6'))    # 0 = no follow-up listening
         self.followups = int(get('VOICE_FOLLOWUPS', '3'))              # follow-ups in a row
 
@@ -99,8 +103,8 @@ class Endpointer:
 
     # min_level: floor for "that's speech", for a dead-silent room. Low on purpose: some USB
     # mics are quiet (the UM02 puts normal talking at rms 100-300 over a room at ~35).
-    def __init__(self, noise_rms, end_silence=1.0, max_s=10.0, start_timeout=5.0, ignore_s=0.25, min_level=60.0):
-        self.thr = max(noise_rms * 3.0, min_level)
+    def __init__(self, noise_rms, end_silence=1.0, max_s=10.0, start_timeout=5.0, ignore_s=0.25, min_level=60.0, ratio=2.0):
+        self.thr = max(noise_rms * ratio, min_level)
         self.end_silence, self.max_s, self.start_timeout, self.ignore_s = end_silence, max_s, start_timeout, ignore_s
         self.t = 0.0
         self.loud_run = 0
@@ -341,7 +345,7 @@ def run(cfg):
 
 def record(cfg, mic, noise, start_timeout=5.0):
     """-> (verdict, frames): 'done' with the command's audio, or 'nothing'"""
-    ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s, start_timeout=start_timeout, min_level=cfg.min_level)
+    ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s, start_timeout=start_timeout, min_level=cfg.min_level, ratio=cfg.speech_ratio)
     frames = []
     while True:
         f = mic.frame()
@@ -396,6 +400,10 @@ def handle_command(cfg, api, mic, speaker, noise):
     if not r.get('listen'):
         log(f'  ignored: {r.get("why", "backend said no")}')
         return
+    if r.get('ducked') and noise > cfg.duck_room:
+        # The noise floor was measured with the TV playing; it's muted now
+        log(f'  TV muted for the command (room was {noise:.0f} with it on)')
+        noise = cfg.duck_room
     verdict, frames, ep = record(cfg, mic, noise)
     if verdict == 'nothing':
         log(f'  no command heard (room {noise:.0f}, needed {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f})')
