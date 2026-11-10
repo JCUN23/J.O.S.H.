@@ -15,7 +15,8 @@ const groqParams = () => ({
 // "my AI service isn't responding"). On a 429: wait and retry if Groq says it's short,
 // else use the smaller model, which has its own budget.
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const FALLBACK_MODEL = () => process.env.GROQ_FALLBACK_MODEL ?? 'openai/gpt-oss-20b';
+// Each Groq model has its own rate-limit budget: on a 429, walk this list (comma-separated)
+const FALLBACK_MODELS = () => String(process.env.GROQ_FALLBACK_MODEL ?? 'openai/gpt-oss-20b').split(',').map((m) => m.trim()).filter(Boolean);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function groqPost(body, { timeout = 15000 } = {}) {
   const post = (b) => axios.post(GROQ_URL, b, {
@@ -32,10 +33,13 @@ async function groqPost(body, { timeout = 15000 } = {}) {
       await sleep(wait * 1000);
       try { return await post(body); } catch (again) { if (again.response?.status !== 429) throw again; }
     }
-    const fallback = FALLBACK_MODEL();
-    if (!fallback || fallback === body.model) throw err;
-    console.log(`[Sentinel] Groq rate limit on ${body.model}; using ${fallback}`);
-    return post({ ...body, model: fallback });
+    let last = err;
+    for (const fallback of FALLBACK_MODELS().filter((m) => m !== body.model)) {
+      console.log(`[Sentinel] Groq rate limit on ${body.model}; using ${fallback}`);
+      try { return await post({ ...body, model: fallback }); }
+      catch (e) { if (e.response?.status !== 429) throw e; last = e; }
+    }
+    throw last;
   }
 }
 
@@ -69,14 +73,23 @@ async function runSentinel(message, { spotifyToken } = {}) {
 
 async function runAgent(message, { spotifyToken, history = [] } = {}) {
 
-  // Build initial messages array — this grows every iteration
+  // Prompt caching: Groq doesn't count CACHED input tokens against the rate limit, and the
+  // cache only matches an identical prefix. So the system prompt and the tool list stay
+  // byte-for-byte the same on every request (~4-5K tokens, cached after the first), and
+  // everything that changes (the time, saved facts) rides in the user turn at the end.
+  // Before Nov 9 the clock in the system prompt and a per-request tool subset meant
+  // nothing was ever cached and two commands in a minute hit the 8K TPM limit.
+  const context = `[Right now it is ${new Date().toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.${require('../lib/sentinel/longMemory').promptBlock()}]`;
   const messages = [
-    { role: 'system', content: `${SENTINEL_SYSTEM_PROMPT}\n\nRight now it is ${new Date().toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.${require('../lib/sentinel/longMemory').promptBlock()}` },
+    { role: 'system', content: SENTINEL_SYSTEM_PROMPT },
     ...history,                                   // the last few exchanges: follow-ups work
-    { role: 'user', content: message }
+    { role: 'user', content: `${context}\n\n${message}` }
   ];
-  // Only the tool groups this request can need (lib/sentinel/toolRouter.js): saves tokens
-  const requestTools = require('../lib/sentinel/toolRouter').pickTools(SENTINEL_TOOLS, message, history);
+  // Every tool, same order, every time (cacheable). ALFRED_TOOL_ROUTING=on restores the
+  // per-request subset (lib/sentinel/toolRouter.js) for a provider without caching.
+  const requestTools = process.env.ALFRED_TOOL_ROUTING === 'on'
+    ? require('../lib/sentinel/toolRouter').pickTools(SENTINEL_TOOLS, message, history)
+    : SENTINEL_TOOLS;
 
   const MAX_ITERATIONS = 5; // Safety valve — prevent infinite loops
   let iterations = 0;
@@ -94,6 +107,8 @@ async function runAgent(message, { spotifyToken, history = [] } = {}) {
     try {
       const response = await groqPost({ ...groqParams(), messages, tools: requestTools, tool_choice: 'auto' });
       choice = response.data.choices[0];
+      const u = response.data.usage;
+      if (u) console.log(`[Sentinel] tokens: ${u.prompt_tokens} in, ${u.prompt_tokens_details?.cached_tokens ?? 0} cached (free vs the rate limit), ${u.completion_tokens} out`);
     } catch (groqErr) {
       // Llama tried to force a tool call and failed — retry without tools
       if (groqErr.response?.data?.error?.code === 'tool_use_failed') {

@@ -67,6 +67,34 @@ test('sentinel chat (Groq)', async (t) => {
     assert.deepEqual(requests.map((q) => q.model), ['openai/gpt-oss-120b', 'openai/gpt-oss-20b']);
   });
 
+  await t.test('prompt caching: system prompt + tools identical on every request; clock in the user turn', async () => {
+    requests.length = 0;
+    script = [{ finish_reason: 'stop', message: { role: 'assistant', content: 'A.' } },
+              { finish_reason: 'stop', message: { role: 'assistant', content: 'B.' } }];
+    await app.call('POST', '/api/sentinel/chat', { message: 'make the office feel like a sunset and tell me a joke' });
+    await app.call('POST', '/api/sentinel/chat', { message: 'anything fun happening this weekend around here' });
+    const [a, b] = requests;
+    assert.equal(JSON.stringify(a.messages[0]), JSON.stringify(b.messages[0]), 'same system message');
+    assert.doesNotMatch(a.messages[0].content, /Right now it is/, 'no clock in the cached prefix');
+    assert.equal(JSON.stringify(a.tools), JSON.stringify(b.tools), 'same tools, same order');
+    assert.equal(a.tools.length, require('../lib/sentinel/tools').SENTINEL_TOOLS.length);
+    require('../lib/sentinel/memory').forget();
+  });
+
+  await t.test('rate limit on two models: the next one in GROQ_FALLBACK_MODEL answers', async () => {
+    requests.length = 0;
+    process.env.GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b, qwen/qwen3.8-27b';
+    const limited = () => Object.assign(httpError(429, { error: { message: 'Rate limit' } }), {});
+    const a = limited(); a.response.headers = { 'retry-after': '40' };
+    const b = limited(); b.response.headers = {};
+    script = [a, b, { finish_reason: 'stop', message: { role: 'assistant', content: 'Third time.' } }];
+    const r = await app.call('POST', '/api/sentinel/chat', { message: 'hi there' });
+    assert.equal(r.body.response, 'Third time.');
+    assert.deepEqual(requests.map((q) => q.model), ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b']);
+    delete process.env.GROQ_FALLBACK_MODEL;
+    require('../lib/sentinel/memory').forget();
+  });
+
   await t.test('rate limit with a short retry-after: waits and retries the same model', async () => {
     requests.length = 0;
     const limited = httpError(429, { error: { message: 'Rate limit reached' } });
@@ -100,7 +128,8 @@ test('follow-ups: the last few exchanges go along; forgotten after quiet minutes
   await app.call('POST', '/api/sentinel/chat', { message: 'when do the lions play' });
   await app.call('POST', '/api/sentinel/chat', { message: 'what about tomorrow' });
   const sent = requests[1].messages.map((m) => `${m.role}:${m.content}`);
-  assert.deepEqual(sent.slice(1), ['user:when do the lions play', 'assistant:The Lions play at 1 PM.', 'user:what about tomorrow']);
+  assert.deepEqual(sent.slice(1, 3), ['user:when do the lions play', 'assistant:The Lions play at 1 PM.']);
+  assert.match(sent[3], /^user:\[Right now it is .+\]\n\nwhat about tomorrow$/, 'the time rides in the newest user turn');
 
   // 6 quiet minutes later: a fresh start
   const later = Date.now() + 6 * 60_000;
