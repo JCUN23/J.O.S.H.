@@ -153,6 +153,14 @@ const SENTINEL_TOOLS = [
   {
     type: "function",
     function: {
+      name: "system_status",
+      description: "Health of the Raspberry Pi that runs you: CPU temperature, CPU load, RAM, disk space, uptime, throttling or power problems. Use for 'how's the Pi doing', 'is the server hot', 'how much memory is free'.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "activate_scene",
       description: "Activate a lighting/TV scene by name. Available scenes: Movie Night, Relax, Focus, All Bright, Goodnight, All Off. Use when the user asks for a mood or routine (e.g. 'movie night', 'goodnight', 'I'm going to bed', 'time to focus').",
       parameters: {
@@ -312,7 +320,7 @@ const SENTINEL_TOOLS = [
         type: "object",
         properties: {
           action: { type: "string", enum: ["show", "hide", "theme", "mode", "lock", "idle"] },
-          target: { type: "string", description: "show/hide: weather, calendar, sports, spotify, news, govee, hue, printer, scenes, activity, tv, quick_controls. theme: cyan, yellow, mocha. mode: light, dark." }
+          target: { type: "string", description: "show/hide: weather, calendar, sports, spotify, news, govee, hue, printer, scenes, activity, tv, quick_controls, system (Pi diagnostics). theme: cyan, yellow, mocha. mode: light, dark." }
         },
         required: ["action"]
       }

@@ -123,6 +123,9 @@ const routes = {
   'GET /api/timers': { now: NOW.getTime(), items: [{ id: 't1', kind: 'timer', label: 'pizza', dueAt: NOW.getTime() + 7 * 60_000 + 23_000 }, { id: 't2', kind: 'reminder', label: 'call Mom', dueAt: new Date(day(0, 17)).getTime() }] },
   'GET /api/voice/status': { listener: { mic: 'USB mic', model: 'alfred' }, panels: 1, configured: true },
   'GET /api/game-day/status': { last: null, teams: [] },
+  'GET /api/system': { model: 'Raspberry Pi 5 Model B Rev 1.0', tempC: 54.2, cpuPercent: 12, cores: 4, load: { one: 0.38, five: 0.31, fifteen: 0.27 },
+    memory: { totalMb: 2009, usedMb: 1104, swapTotalMb: 512, swapUsedMb: 38 }, disk: { totalGb: 58.4, usedGb: 9.6 }, fanRpm: 2840,
+    throttled: { raw: '0x0', now: [], sinceBoot: [] }, uptimeS: 4 * 86400 + 6 * 3600, backend: { rssMb: 94, uptimeS: 86400 } },
 };
 
 const spotifyTrack = { id: 'demo1', name: 'Midnight Protocol', duration_ms: 214000, artists: [{ name: 'The Gotham Strings' }],
@@ -211,8 +214,8 @@ async function handle(route) {
 
   const MAIN = ['weather', 'sports', 'calendar', 'spotify', 'phillips_hue', 'scenes', 'govee', 'crealityprinter', 'frametv', 'activity', 'news', 'quickcontrols'];
   await shoot('panel', { order: MAIN });
-  const DEVICES = ['phillips_hue', 'govee', 'crealityprinter', 'frametv', 'activity', 'news', 'weather', 'sports', 'calendar', 'spotify', 'scenes', 'quickcontrols'];
-  // Devices: lights, printer, TV, activity
+  const DEVICES = ['phillips_hue', 'govee', 'crealityprinter', 'frametv', 'system', 'activity', 'news', 'weather', 'sports', 'calendar', 'spotify', 'scenes', 'quickcontrols'];
+  // Devices: lights, printer, TV, Pi diagnostics, activity
   await shoot('devices', { order: DEVICES, announce: false });
   // Close-up: the color studio, mid-drag (a held drag only previews, so nothing reloads)
   await shoot('color', {

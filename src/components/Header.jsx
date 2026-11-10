@@ -59,7 +59,8 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
         hue: 'Philips Hue',
         scenes: 'Scenes & Rules',
         activity: 'Activity',
-        frametv: 'Frame TV'
+        frametv: 'Frame TV',
+        system: 'Pi Diagnostics'
     };
 
     return (

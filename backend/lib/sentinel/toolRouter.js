@@ -24,6 +24,7 @@ const GROUPS = [
   { re: /\b(show|hide|open|display|widget|panel|screen|theme|dark mode|light mode|lock|standby|idle|go to sleep)\b/, tools: ['control_panel'] },
   { re: /\b(send|text|push|phone|notify me|note)\b/, tools: ['send_to_phone'] },
   { re: /\b(rules?|automations?|sunset|happened|while i was|activity|home|away|who's|anyone)\b/, tools: ['list_rules', 'set_rule', 'activity_summary', 'presence_status'] },
+  { re: /\b(pi|raspberry|server|hub|cpu|ram|memory free|disk|storage|uptime|throttl\w*|overheat\w*|diagnostics?)\b/, tools: ['system_status'] },
   { re: /\b(brief|briefing|my day|catch me up|rundown)\b/, tools: ['get_briefing'] },
   { re: /\b(time|date|what day)\b/, tools: ['get_time'] },
 ];

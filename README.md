@@ -48,6 +48,7 @@ Alfred is the voice of the system: an Alfred Pennyworth-style assistant that **a
 | "What's playing?" / "Like this song" / "Queue Redbone" | Spotify extras on top of play/pause/skip |
 | "Move dinner to 8" / "Cancel my dentist appointment" | Edits calendar events; deletes only after he asks and you say yes |
 | "Turn off the sunset rule" / "What happened while I was out?" | Automation rules, the activity log, and presence by voice |
+| "How's the Pi doing?" | Live host diagnostics: CPU temperature, load, RAM, disk, fan speed, power and throttling flags |
 | "Pause the print" / "Send me that" | Printer control (stop needs a yes), and a push of anything to your phone |
 
 He also speaks up unprompted: a briefing the first time the panel sees me in the morning, a welcome when I get home, live game alerts ("Touchdown Lions! Lions 21, Packers 10."), weather heads-ups ("rain starting around 4"), Game Day kickoffs, and finished 3D prints.
@@ -56,7 +57,7 @@ He also speaks up unprompted: a briefing the first time the panel sees me in the
 
 ## Screenshots
 
-| Devices: lights, printer, TV, activity | Color studio | Idle "Batcave" screen |
+| Devices: lights, printer, TV, Pi diagnostics, activity | Color studio | Idle "Batcave" screen |
 |---|---|---|
 | ![Devices](docs/screenshots/devices.png) | ![Color studio](docs/screenshots/color.png) | ![Idle screen](docs/screenshots/idle.png) |
 
@@ -193,7 +194,7 @@ A Python service on the Pi runs an on-device wake-word model and records until t
 
 **Panel**
 - Two-row horizontal widget grid that fits the screen exactly, with drag-to-reorder
-- Widgets: weather, 7-day calendar, sports, news, Spotify, Govee, Hue, Frame TV, scenes, activity, 3D printer
+- Widgets: weather, 7-day calendar, sports, news, Spotify, Govee, Hue, Frame TV, scenes, activity, 3D printer, Pi diagnostics (temperature trend, RAM, disk, fan, under-voltage/throttling from `vcgencmd`)
 - Face-recognition lock, idle "Batcave" screen with camera wake, light/dark mode and themes
 - Installable PWA, served over HTTPS on a private tailnet
 

@@ -20,7 +20,7 @@ const WIDGET_KEYS = [
     'weather', 'sports', 'calendar', 'quickcontrols',
     'spotify', 'news', 'govee',
     'crealityprinter', 'phillips_hue',   // 'crealityprinter' slot holds the Bambu printer widget
-    'scenes', 'activity', 'frametv'
+    'scenes', 'activity', 'frametv', 'system'
 ];
 
 // editMode/onEditModeChange: controlled from the Widgets menu (App). Without them the

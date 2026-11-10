@@ -10,6 +10,7 @@ import SystemStatus from './components/SystemStatus';
 import ScenesWidget from './components/ScenesWidget';
 import ActivityWidget from './components/ActivityWidget';
 import FrameTvWidget from './components/FrameTvWidget';
+import SystemWidget from './components/SystemWidget';
 import IdleMode from './components/IdleMode';
 import { createUtterance, mergeSpeech } from './utils/utterance';
 import { getIdleEnabled, setIdleEnabled, IDLE_MINUTES, WAKE_EVENT, ARRIVED_EVENT, IDLE_NOW_EVENT } from './utils/idlePrefs';
@@ -115,6 +116,7 @@ const BatcomputerHub = () => {
       scenes: true,
       activity: true,
       frametv: true,
+      system: true,
     };
     // Merge so widgets added after a device saved its settings still show up
     // (saved settings used to replace the defaults wholesale -> new widgets hidden).
@@ -332,7 +334,8 @@ const BatcomputerHub = () => {
   const PANEL_WIDGETS = { weather: ['weather', 'weather'], calendar: ['calendar', 'calendar'], sports: ['sports', 'sports'],
     spotify: ['spotify', 'spotify'], news: ['news', 'news'], govee: ['govee', 'govee'], hue: ['phillips_hue', 'hue'],
     printer: ['crealityprinter', 'printer'], scenes: ['scenes', 'scenes'], activity: ['activity', 'activity'],
-    tv: ['frametv', 'frametv'], quick_controls: ['quickcontrols', 'quickControls'] };
+    tv: ['frametv', 'frametv'], quick_controls: ['quickcontrols', 'quickControls'],
+    system: ['system', 'system'], pi: ['system', 'system'], diagnostics: ['system', 'system'] };
   const applyPanelAction = ({ action, target } = {}) => {
     const t = String(target || '').toLowerCase().replace(/\s+/g, '_');
     if (action === 'show' || action === 'hide') {
@@ -1051,6 +1054,7 @@ const BatcomputerHub = () => {
             {widgetVisibility.scenes && <ScenesWidget key="scenes" theme={theme} />}
             {widgetVisibility.activity && <ActivityWidget key="activity" theme={theme} />}
             {widgetVisibility.frametv && <FrameTvWidget key="frametv" theme={theme} />}
+            {widgetVisibility.system && <SystemWidget key="system" theme={theme} />}
           </DraggableGrid>
         </div>
 

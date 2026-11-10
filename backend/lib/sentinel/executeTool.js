@@ -338,6 +338,11 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     return `Printing ${p.job || 'a job'}: ${p.percent ?? '?'}% (layer ${p.layer ?? '?'} of ${p.totalLayers ?? '?'}), ${left}${done}.`;
   }
 
+  if (toolName === 'system_status') {
+    const stats = require('../systemStats');
+    return stats.summary(await stats.snapshot());
+  }
+
   if (toolName === 'activate_scene') {
     const scenes = require('../scenes');
     const scene = scenes.find(args.scene);
