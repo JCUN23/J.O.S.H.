@@ -37,7 +37,8 @@ const setHueColors = (colors) => devices.hueApply({ lightIds: HUE_LIGHTS, colorF
 //   GAMEDAY_TV_APP_BARCELONA=ESPN                                 per-team override (wins)
 //   GAMEDAY_TV_APP=fubo                                           used when the networks are unknown
 //   GAMEDAY_TV_MUTE=false                                         leave the sound alone
-const DEFAULT_NETWORK_APPS = 'ESPN+=ESPN,Peacock=Peacock,NBC=Peacock,HBO Max=HBO Max|Max,Max=HBO Max|Max,TNT=HBO Max|Max,truTV=HBO Max|Max,TBS=HBO Max|Max,*=fubo';
+// NBCSN: ESPN's name for NBC Sports Network games (Nov 9 Pistons), streamed on Peacock
+const DEFAULT_NETWORK_APPS = 'ESPN+=ESPN,Peacock=Peacock,NBC=Peacock,NBCSN=Peacock,NBC Sports Network=Peacock,Prime Video=Prime Video,Amazon Prime Video=Prime Video,HBO Max=HBO Max|Max,Max=HBO Max|Max,TNT=HBO Max|Max,truTV=HBO Max|Max,TBS=HBO Max|Max,*=fubo';
 const norm = (x) => String(x).toLowerCase().replace(/\s+/g, '');
 
 // Network names from an ESPN event (schedule and scoreboard feeds shape these differently)

@@ -86,7 +86,7 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "game_day_mode",
-      description: "Activate Game Day Mode — wakes the TV from art mode, navigates to the home screen for streaming apps, and sets all lights to the team's colors. Use when a followed team's game is about to start or is live.",
+      description: "Activate Game Day Mode — wakes the TV out of art mode, opens the streaming app the game is on, and sets all lights to the team's colors. Use when a followed team's game is about to start or is live.",
       parameters: {
         type: "object",
         properties: {

@@ -393,9 +393,17 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
     if (artMode !== undefined || app || mute !== undefined || home) did.push('off, left alone');
     return did;
   }
+  let artUnconfirmed = false;
   if (artMode !== undefined) {
-    try { did.push(await ensureArtMode(tv, artMode)); }
-    catch (err) { did.push(`art mode: ${err.message}`); }      // keep going: the app/mute still matter
+    try { const r = await ensureArtMode(tv, artMode); did.push(r); artUnconfirmed = r.includes('no art status'); }
+    catch (err) { did.push(`art mode: ${err.message}`); artUnconfirmed = true; }   // keep going: the app/mute still matter
+  }
+  // Nov 9: the TV never said whether it left art mode, and the app opened BEHIND the art.
+  // HOME is what reliably brings a Frame out of art mode, so press it first, then launch.
+  if (artMode === false && artUnconfirmed && (app || home)) {
+    await sendKey(tv, 'KEY_HOME'); did.push('HOME to leave art');
+    await delay(opt().settleMs);
+    if (!app) return mute !== undefined ? [...did, await setMute(tv, mute)] : did;
   }
   if (app) {
     if (justWoke) await delay(opt().wakeSettleMs);           // just woke: app framework still booting

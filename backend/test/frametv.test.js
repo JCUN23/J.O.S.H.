@@ -210,6 +210,11 @@ test('app that ignores deep links starts with the next launch style; silent art 
   tv.launchNeeds = null;
   tv.artGetWorks = false; tv.art = 'off';             // TV won't report art state, won't answer a no-op
   assert.equal(await frame.ensureArtMode(office, false), 'art off sent (TV gave no art status)');
+  // Nov 9: unconfirmed art-off -> press HOME before launching, or the app opens behind the art
+  tv.keys = []; tv.running = new Set();   // still silent: no status, set goes unanswered
+  const r2 = await frame.apply({ power: true, artMode: false, app: 'Netflix' });
+  assert.match(r2, /art off sent \(TV gave no art status\), HOME to leave art, opened Netflix/);
+  assert.equal(tv.keys[0], 'Click:KEY_HOME');
   tv.artGetWorks = true;
 });
 

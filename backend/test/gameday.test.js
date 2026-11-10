@@ -129,6 +129,8 @@ test('pickTvApp: per-team override, then network map, then default', () => {
   const barca = findTeam('barcelona');
   assert.equal(gameDay.pickTvApp(lions, ['FOX']).app, 'fubo');
   assert.equal(gameDay.pickTvApp(lions, ['NBC', 'Peacock']).app, 'Peacock');
+  assert.equal(gameDay.pickTvApp(lions, ['NBCSN']).app, 'Peacock', 'Nov 9 Pistons: NBCSN is Peacock, not Fubo');
+  assert.equal(gameDay.pickTvApp(lions, ['Prime Video']).app, 'Prime Video');
   assert.equal(gameDay.pickTvApp(findTeam('michigan basketball'), ['TNT', 'truTV']).app, 'HBO Max|Max');
   assert.equal(gameDay.pickTvApp(barca, ['ESPN+']).app, 'ESPN');
   assert.equal(gameDay.pickTvApp(lions, ['HBO Max']).app, 'HBO Max|Max');
