@@ -30,6 +30,11 @@ const opt = () => ({
   bootMs: Number(process.env.FRAME_TV_BOOT_MS) || 20000,
   dmrPort: Number(process.env.FRAME_TV_DMR_PORT) || 9197,
   settleMs: process.env.FRAME_TV_SETTLE_MS !== undefined ? Number(process.env.FRAME_TV_SETTLE_MS) : 1500,
+  // A TV that was just woken answers its API before apps can start: wait this long first
+  wakeSettleMs: process.env.FRAME_TV_WAKE_SETTLE_MS !== undefined ? Number(process.env.FRAME_TV_WAKE_SETTLE_MS) : 5000,
+  // How long the FIRST launch style gets to come up. Streaming apps cold-start slowly
+  // (Nov 9: Peacock for the Pistons took longer than 6s, and we then sent it HOME).
+  firstWaitMs: Number(process.env.FRAME_TV_APP_FIRST_WAIT_MS) || 15000,
 });
 
 function configured() {
@@ -250,21 +255,25 @@ async function launchApp(tv, query) {
   const waitMs = Number(process.env.FRAME_TV_APP_WAIT_MS) || 6000;
   let missing = 0;
   const tried = [];
+  const sentIds = [];
   for (const id of app.ids) {
     if ((await appState(tv, id)) === 'missing') { missing++; continue; }   // wrong id for this model
+    sentIds.push(id);
     // App list told us the type: native apps (4) go native first, the rest deep link first
     const order = app.type === 4 ? [LAUNCHERS[1], LAUNCHERS[0], LAUNCHERS[2]] : LAUNCHERS;
     for (const [style, launch] of order) {
       try { await launch(tv, id); } catch { /* many TVs launch without replying */ }
-      const st = await waitRunning(tv, id, waitMs);
+      const st = await waitRunning(tv, id, tried.length ? waitMs : Math.max(waitMs, opt().firstWaitMs));
       if (st === 'running') return app.name;
       if (st === 'unknown') return `${app.name} (sent; TV doesn't confirm launches)`;
       tried.push(style);
     }
   }
-  throw new Error(missing === app.ids.length
-    ? `${app.name} isn't installed on the TV (or its app id changed: set FRAME_TV_APP_IDS)`
-    : `${app.name} didn't start (tried ${tried.join(', ')})`);
+  // Last look: a slow app may have come up after its own wait ran out
+  for (const id of sentIds) { if ((await appState(tv, id)) === 'running') return app.name; }
+  if (missing === app.ids.length) throw new Error(`${app.name} isn't installed on the TV (or its app id changed: set FRAME_TV_APP_IDS)`);
+  // Launches were sent: it may still be starting, so callers must NOT press HOME over it
+  throw Object.assign(new Error(`${app.name} didn't confirm it started (tried ${tried.join(', ')})`), { code: 'launch_sent' });
 }
 
 // Art mode only when it needs changing: some firmware never answers a request for the
@@ -377,7 +386,8 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
   const did = [];
   if (power === false) { did.push(await powerOff(tv)); return did; }
   let on = false;
-  if (power === true) { did.push(await powerOn(tv)); on = true; }
+  let justWoke = false;
+  if (power === true) { const r = await powerOn(tv); did.push(r); on = true; justWoke = r === 'on'; }
   else on = (await info(tv))?.power === 'on';
   if (!on) {
     if (artMode !== undefined || app || mute !== undefined || home) did.push('off, left alone');
@@ -388,9 +398,14 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
     catch (err) { did.push(`art mode: ${err.message}`); }      // keep going: the app/mute still matter
   }
   if (app) {
-    if (artMode === false) await delay(opt().settleMs);     // let it leave art mode first
+    if (justWoke) await delay(opt().wakeSettleMs);           // just woke: app framework still booting
+    else if (artMode === false) await delay(opt().settleMs); // let it leave art mode first
     try { did.push(`opened ${await launchApp(tv, app)}`); }
-    catch (err) { did.push(`app error: ${err.message}`); await sendKey(tv, 'KEY_HOME'); did.push('home screen'); }
+    catch (err) {
+      did.push(`app error: ${err.message}`);
+      // HOME only when nothing was launched: pressing it over a slow-starting app kills it
+      if (err.code !== 'launch_sent') { await sendKey(tv, 'KEY_HOME'); did.push('home screen'); }
+    }
   } else if (home) { await delay(opt().settleMs); await sendKey(tv, 'KEY_HOME'); did.push('home screen'); }
   if (mute !== undefined) did.push(await setMute(tv, mute));
   return did;

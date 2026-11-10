@@ -93,7 +93,7 @@ test.before(async () => {
   Object.assign(process.env, {
     FRAME_TVS: 'Office@127.0.0.1', FRAME_TV_WS_SCHEME: 'ws', FRAME_TV_WS_PORT: String(port),
     FRAME_TV_HTTP_PORT: String(port), FRAME_TV_WOL_ADDR: '127.0.0.1', FRAME_TV_WOL_PORT: String(udp.address().port),
-    FRAME_TV_BOOT_MS: '3000', FRAME_TV_DMR_PORT: String(port), FRAME_TV_SETTLE_MS: '0', FRAME_TV_APP_WAIT_MS: '600', FRAME_TV_CONNECT_MS: '700',
+    FRAME_TV_BOOT_MS: '3000', FRAME_TV_DMR_PORT: String(port), FRAME_TV_SETTLE_MS: '0', FRAME_TV_APP_WAIT_MS: '600', FRAME_TV_APP_FIRST_WAIT_MS: '600', FRAME_TV_WAKE_SETTLE_MS: '0', FRAME_TV_CONNECT_MS: '700',
   });
   frame = require('../lib/frameTv');
 });
@@ -196,7 +196,17 @@ test('app that ignores deep links starts with the next launch style; silent art 
   assert.equal(await frame.launchApp(office, 'Netflix'), 'Netflix');
   assert.deepEqual(tv.launched, ['3201907018807:DEEP_LINK', '3201907018807:NATIVE_LAUNCH']);
   tv.launchNeeds = 'NOTHING'; tv.running = new Set();
-  await assert.rejects(frame.launchApp(office, 'Netflix'), /Netflix didn't start \(tried deep link, native, REST\)/);
+  await assert.rejects(frame.launchApp(office, 'Netflix'), /Netflix didn't confirm it started \(tried deep link, native, REST\)/);
+  // Nov 9 (Pistons on Peacock): a launch that was sent but unconfirmed must not get HOME pressed over it
+  tv.keys = [];
+  const r = await frame.apply({ power: true, artMode: false, app: 'Netflix' });
+  assert.match(r, /app error: Netflix didn't confirm it started/);
+  assert.ok(!r.includes('home screen') && !tv.keys.includes('Click:KEY_HOME'), 'no HOME over a slow app');
+  // ...and one that comes up late is found by the last look
+  tv.launchNeeds = 'NOTHING'; tv.running = new Set();
+  const late = setTimeout(() => tv.running.add('3201907018807'), 1500);
+  assert.equal(await frame.launchApp(office, 'Netflix'), 'Netflix');
+  clearTimeout(late);
   tv.launchNeeds = null;
   tv.artGetWorks = false; tv.art = 'off';             // TV won't report art state, won't answer a no-op
   assert.equal(await frame.ensureArtMode(office, false), 'art off sent (TV gave no art status)');
