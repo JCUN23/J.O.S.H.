@@ -26,6 +26,7 @@ const httpSrv = http.createServer((req, res) => {
   if (appMatch) {
     res.setHeader('Content-Type', 'application/json');
     if (!tv.installed.has(appMatch[1])) { res.statusCode = 404; res.end('{}'); return; }
+    if (req.method === 'DELETE') { tv.running.delete(appMatch[1]); (tv.closed ||= []).push(appMatch[1]); res.end('true'); return; }
     res.end(JSON.stringify({ id: appMatch[1], running: tv.running.has(appMatch[1]) }));
     return;
   }
@@ -202,6 +203,12 @@ test('app that ignores deep links starts with the next launch style; silent art 
   const r = await frame.apply({ power: true, artMode: false, app: 'Netflix' });
   assert.match(r, /app error: Netflix didn't confirm it started/);
   assert.ok(!r.includes('home screen') && !tv.keys.includes('Click:KEY_HOME'), 'no HOME over a slow app');
+  // Nov 9: Peacock was suspended in the background (running=true) and our launch "worked"
+  // without bringing it forward. Close it first, so the fresh start is what we confirm.
+  tv.launchNeeds = null; tv.running = new Set(['3201907018807']); tv.launched = []; tv.closed = [];
+  assert.equal(await frame.launchApp(office, 'Netflix'), 'Netflix');
+  assert.deepEqual(tv.closed, ['3201907018807'], 'closed the background copy');
+  assert.deepEqual(tv.launched, ['3201907018807:DEEP_LINK'], 'then launched it fresh');
   // ...and one that comes up late is found by the last look
   tv.launchNeeds = 'NOTHING'; tv.running = new Set();
   const late = setTimeout(() => tv.running.add('3201907018807'), 1500);

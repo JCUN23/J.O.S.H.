@@ -239,6 +239,17 @@ async function waitRunning(tv, id, ms) {
   return st;
 }
 
+// Close an app over REST. Samsung keeps apps suspended in the background, and a suspended
+// app reports running=true, so "running" after a launch proved nothing (Nov 9: Peacock
+// "opened" but stayed behind the home screen). Close it first, then a fresh start is real.
+async function closeApp(tv, id) {
+  try { await axios.delete(`http://${tv.host}:${opt().httpPort}/api/v2/applications/${id}`, { timeout: 3000 }); }
+  catch { return false; }
+  const end = Date.now() + 4000;
+  while (Date.now() < end) { if ((await appState(tv, id)) !== 'running') return true; await delay(400); }
+  return false;
+}
+
 // Launch styles, in order: the websocket deep link, the websocket native launch, then the
 // older REST POST. Different apps/firmware accept different ones; REST state tells us
 // which worked. (Nov 6: HBO Max installed, DEEP_LINK alone didn't start it.)
@@ -257,8 +268,15 @@ async function launchApp(tv, query) {
   const tried = [];
   const sentIds = [];
   for (const id of app.ids) {
-    if ((await appState(tv, id)) === 'missing') { missing++; continue; }   // wrong id for this model
+    const before = await appState(tv, id);
+    if (before === 'missing') { missing++; continue; }   // wrong id for this model
     sentIds.push(id);
+    if (before === 'running' && !(await closeApp(tv, id))) {
+      // Can't close it: the running flag can't confirm anything, so just ask for the front
+      try { await LAUNCHERS[0][1](tv, id); } catch { /* no reply is normal */ }
+      return `${app.name} (was already open in the background; asked it to come forward)`;
+    }
+    if (before === 'running') await delay(opt().settleMs);
     // App list told us the type: native apps (4) go native first, the rest deep link first
     const order = app.type === 4 ? [LAUNCHERS[1], LAUNCHERS[0], LAUNCHERS[2]] : LAUNCHERS;
     for (const [style, launch] of order) {
