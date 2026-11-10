@@ -18,7 +18,7 @@ const store = createJsonStore(
   process.env.SPOTIFY_STORE_PATH || path.join(__dirname, '..', 'data', 'spotify.json'),
   { label: 'Spotify shortcuts' }
 );
-const opt = () => ({ waitMs: Number(process.env.SPOTIFY_DEVICE_WAIT_MS ?? 15000), pollMs: Number(process.env.SPOTIFY_DEVICE_POLL_MS ?? 1500) });
+const opt = () => ({ waitMs: Number(process.env.SPOTIFY_DEVICE_WAIT_MS ?? 15000), pollMs: Number(process.env.SPOTIFY_DEVICE_POLL_MS ?? 1000) });
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const MADE_FOR_YOU = /discover weekly|release radar|daily mix|on repeat|repeat rewind|daylist|time capsule|\bblend\b|your top songs/;

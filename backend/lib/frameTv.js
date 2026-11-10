@@ -304,9 +304,21 @@ async function launchApp(tv, query, { fresh = false } = {}) {
 
 // Art mode only when it needs changing: some firmware never answers a request for the
 // state it's already in (Nov 6: "TV didn't answer art request set_artmode_status").
+// Some Frames never answer art requests at all (Josh's: "TV gave no art status" on every
+// run). Waiting out ask -> set -> ask again cost ~13s before every app launch (Nov 9:
+// Discover Weekly took 20s). Once a TV is known silent, send the change and move on;
+// re-learn twice a day in case a firmware update starts answering.
+const ART_SILENT_RECHECK_MS = 12 * 3600_000;
 async function ensureArtMode(tv, on) {
+  const silentAt = saved(tv).artSilentAt;
+  if (silentAt && Date.now() - silentAt < ART_SILENT_RECHECK_MS) {
+    artRequest(tv, 'set_artmode_status', { value: on ? 'on' : 'off' }, { timeoutMs: 1500 }).catch(() => {});
+    await delay(300);                                       // let the request go out
+    return on ? 'art mode sent (TV gave no art status)' : 'art off sent (TV gave no art status)';
+  }
   let current = null;
   try { current = await getArtMode(tv); } catch { /* status unsupported: just try */ }
+  if (current != null && silentAt) remember(tv, { artSilentAt: null });   // it answers now
   if (current === (on ? 'on' : 'off')) return on ? 'art mode (already)' : 'art already off';
   try {
     await setArtMode(tv, on);
@@ -315,7 +327,10 @@ async function ensureArtMode(tv, on) {
     let now = null;
     try { now = await getArtMode(tv); } catch { /* still nothing */ }
     if (now === (on ? 'on' : 'off')) return on ? 'art mode' : 'art off';
-    if (!on && now == null && current == null) return 'art off sent (TV gave no art status)';
+    if (now == null && current == null) {
+      remember(tv, { artSilentAt: Date.now() });            // next time: don't wait for it
+      if (!on) return 'art off sent (TV gave no art status)';
+    }
     throw err;
   }
   return on ? 'art mode' : 'art off';
@@ -518,4 +533,6 @@ const KEYS = ['KEY_VOLUP', 'KEY_VOLDOWN', 'KEY_MUTE', 'KEY_HOME', 'KEY_RETURN', 
 
 const _resetApproval = () => { for (const k of Object.keys(needsApproval)) delete needsApproval[k]; };
 
-module.exports = { duck, unduck, isDucked, getMute, _resetApproval, configured, find, status, pair, sendKey, getArtMode, setArtMode, ensureArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KNOWN_APPS, KEYS };
+const _forgetArtSilence = () => configured().forEach((tv) => remember(tv, { artSilentAt: null }));
+
+module.exports = { _forgetArtSilence, duck, unduck, isDucked, getMute, _resetApproval, configured, find, status, pair, sendKey, getArtMode, setArtMode, ensureArtMode, powerOn, powerOff, apply, wake, getApps, launchApp, setMute, KNOWN_APPS, KEYS };
