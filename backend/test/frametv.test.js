@@ -206,9 +206,14 @@ test('app that ignores deep links starts with the next launch style; silent art 
   // Nov 9: Peacock was suspended in the background (running=true) and our launch "worked"
   // without bringing it forward. Close it first, so the fresh start is what we confirm.
   tv.launchNeeds = null; tv.running = new Set(['3201907018807']); tv.launched = []; tv.closed = [];
-  assert.equal(await frame.launchApp(office, 'Netflix'), 'Netflix');
+  assert.equal(await frame.launchApp(office, 'Netflix', { fresh: true }), 'Netflix');
   assert.deepEqual(tv.closed, ['3201907018807'], 'closed the background copy');
   assert.deepEqual(tv.launched, ['3201907018807:DEEP_LINK'], 'then launched it fresh');
+  // "put my YouTube video back": resume, never close (closing loses the video)
+  tv.closed = []; tv.launched = [];
+  assert.equal(await frame.launchApp(office, 'Netflix'), 'Netflix (brought back from the background)');
+  assert.deepEqual(tv.closed, [], 'not closed');
+  assert.deepEqual(tv.launched, ['3201907018807:DEEP_LINK', '3201907018807:NATIVE_LAUNCH'], 'every launch style sent');
   // ...and one that comes up late is found by the last look
   tv.launchNeeds = 'NOTHING'; tv.running = new Set();
   const late = setTimeout(() => tv.running.add('3201907018807'), 1500);

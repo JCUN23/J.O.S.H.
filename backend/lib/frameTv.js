@@ -259,7 +259,9 @@ const LAUNCHERS = [
   ['REST', (tv, id) => axios.post(`http://${tv.host}:${opt().httpPort}/api/v2/applications/${id}`, null, { timeout: 3000 })],
 ];
 
-async function launchApp(tv, query) {
+// fresh: true (Game Day, scenes) closes a backgrounded copy so the start can be confirmed.
+// Default ("open YouTube", "put my video back"): resume it where it was, never close it.
+async function launchApp(tv, query, { fresh = false } = {}) {
   let app = null;
   for (const q of String(query).split('|')) { app = await findApp(tv, q); if (app) break; }  // "HBO Max|Max"
   if (!app) throw new Error(`no app matching "${query}" on the TV`);
@@ -271,9 +273,15 @@ async function launchApp(tv, query) {
     const before = await appState(tv, id);
     if (before === 'missing') { missing++; continue; }   // wrong id for this model
     sentIds.push(id);
+    if (before === 'running' && !fresh) {
+      // Resume: this firmware ignores a lone deep link to a running app (Nov 9: YouTube
+      // "opened", nothing moved), so send every launch style; none of them restarts it.
+      for (const [, launch] of LAUNCHERS) { try { await launch(tv, id); } catch { /* no reply is normal */ } await delay(300); }
+      return `${app.name} (brought back from the background)`;
+    }
     if (before === 'running' && !(await closeApp(tv, id))) {
       // Can't close it: the running flag can't confirm anything, so just ask for the front
-      try { await LAUNCHERS[0][1](tv, id); } catch { /* no reply is normal */ }
+      for (const [, launch] of LAUNCHERS) { try { await launch(tv, id); } catch { /* no reply is normal */ } await delay(300); }
       return `${app.name} (was already open in the background; asked it to come forward)`;
     }
     if (before === 'running') await delay(opt().settleMs);
@@ -426,7 +434,7 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
   if (app) {
     if (justWoke) await delay(opt().wakeSettleMs);           // just woke: app framework still booting
     else if (artMode === false) await delay(opt().settleMs); // let it leave art mode first
-    try { did.push(`opened ${await launchApp(tv, app)}`); }
+    try { did.push(`opened ${await launchApp(tv, app, { fresh: true })}`); }
     catch (err) {
       did.push(`app error: ${err.message}`);
       // HOME only when nothing was launched: pressing it over a slow-starting app kills it

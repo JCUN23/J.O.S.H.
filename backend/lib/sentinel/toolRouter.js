@@ -5,7 +5,8 @@
 // like "make them blue" keep the light tools). Nothing matched = every tool, so nothing
 // is ever unreachable.
 const GROUPS = [
-  { re: /\b(lights?|lamps?|neon|hue|govee|bright|brightness|dim|dark|colou?rs?|scenes?|mood|vibe|red|blue|green|purple|pink|orange|yellow|white|warm|cool|movie (?:night|mode))\b/,
+  // Nov 9: "apply relax lighting" matched nothing here ("lighting" isn't "lights") and lost the scene
+  { re: /\b(light(?:s|ing)?|lamps?|neon|hue|govee|bright|brightness|dim|dark|colou?rs?|scenes?|mood|vibe|relax(?:ing)?|cozy|chill|ambien(?:ce|t)|red|blue|green|purple|pink|orange|yellow|white|warm|cool|movie (?:night|mode))\b/,
     tools: ['control_all_lights', 'control_govee_lights', 'control_hue_lights', 'activate_scene'] },
   { re: /\b(music|songs?|play(?:ing)?|spotify|playlists?|album|artist|tracks?|pause|resume|skip|next|previous|volume|listen|queue|like this|more like)\b/,
     tools: ['play_music', 'control_spotify', 'save_playlist_shortcut'] },
@@ -27,6 +28,15 @@ const GROUPS = [
   { re: /\b(time|date|what day)\b/, tools: ['get_time'] },
 ];
 const ALWAYS = ['web_search'];
+const LIGHT_TOOLS = GROUPS[0].tools;
+
+// Any saved scene said by name ("relax", "movie night", a scene added later) needs the scene tool
+function mentionsScene(text) {
+  try {
+    return require('../scenes').list().some((s) => [s.name, String(s.id || '').replace(/-/g, ' ')]
+      .some((n) => n && new RegExp(`\\b${n.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(text)));
+  } catch { return false; }
+}
 
 // -> the tool definitions to send (all of them when nothing matched)
 function pickTools(allTools, message, history = []) {
@@ -34,6 +44,7 @@ function pickTools(allTools, message, history = []) {
   const text = `${message} \n ${lastUser}`.toLowerCase();
   const names = new Set();
   for (const g of GROUPS) if (g.re.test(text)) g.tools.forEach((t) => names.add(t));
+  if (mentionsScene(text)) LIGHT_TOOLS.forEach((t) => names.add(t));
   if (!names.size) return allTools;
   ALWAYS.forEach((t) => names.add(t));
   return allTools.filter((t) => names.has(t.function.name));

@@ -70,6 +70,10 @@ test('tool routing: only the groups a request needs; follow-ups keep them; unkno
     ['activate_scene', 'control_all_lights', 'control_govee_lights', 'control_hue_lights', 'control_spotify', 'play_music', 'save_playlist_shortcut', 'web_search']);
   assert.ok(names('make them blue', [{ role: 'user', content: 'turn on the lights' }]).includes('control_all_lights'));
   assert.ok(names('remind me at 5 to call mom').includes('set_reminder'));
+  // Nov 9: "lighting" and a scene name must bring the scene tool along with the music ones
+  const combo = names('apply relax lighting and put on discover weekly on the frame');
+  for (const t of ['activate_scene', 'play_music', 'control_tv']) assert.ok(combo.includes(t), `${t} missing`);
+  assert.ok(names('movie night and play some jazz').includes('activate_scene'), 'scene by name');
   assert.ok(names('add dinner with Lynz Friday at 7').includes('create_calendar_event'));
   assert.equal(names('tell me a joke').length, SENTINEL_TOOLS.length, 'nothing matched: every tool');
   const all = JSON.stringify(SENTINEL_TOOLS).length;
