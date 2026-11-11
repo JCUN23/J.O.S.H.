@@ -425,12 +425,17 @@ const BatcomputerHub = () => {
     setResponse(responseText);
     setTranscript('');
 
-    // Speak the response — wrapped in try/catch so processing ALWAYS clears
+    // Speak the response — wrapped in try/catch so processing ALWAYS clears.
+    // Tell the backend he's talking, however the command arrived (Pi mic, the tablet's
+    // own mic, typed): that's what makes "Alfred" over the reply a barge-in (Nov 11: a
+    // tablet-started "brief me" couldn't be cut off).
+    reportSpeaking(true);
     try {
       await speak(responseText);
     } catch (speakErr) {
       console.error('[Sentinel] Speak failed:', speakErr);
     }
+    reportSpeaking(false, { followup: !musicPlaying && !endConversation });
 
     // Restart recognition if it was running
     // BUT: if music just started playing, delay restart so the mic doesn't pick up lyrics
