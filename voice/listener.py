@@ -343,6 +343,19 @@ def run(cfg):
             cooldown_until = time.time() + 1.5
 
 
+def wait_for_duck(mic, loud_noise, max_s=1.5):
+    """The backend just muted the TV, but it takes ~1s to go quiet (Nov 11: the song in that
+    second was recorded as the command). Skip audio until the room drops well below the
+    TV-on level, or max_s passes. -> seconds skipped"""
+    skipped = 0.0
+    while skipped < max_s:
+        f = mic.frame()
+        skipped += FRAME_S
+        if rms(f) < loud_noise * 0.5:
+            break
+    return skipped
+
+
 def record(cfg, mic, noise, start_timeout=5.0):
     """-> (verdict, frames): 'done' with the command's audio, or 'nothing'"""
     ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s, start_timeout=start_timeout, min_level=cfg.min_level, ratio=cfg.speech_ratio)
@@ -402,7 +415,8 @@ def handle_command(cfg, api, mic, speaker, noise):
         return
     if r.get('ducked') and noise > cfg.duck_room:
         # The noise floor was measured with the TV playing; it's muted now
-        log(f'  TV muted for the command (room was {noise:.0f} with it on)')
+        skipped = wait_for_duck(mic, noise)
+        log(f'  TV muted for the command (room was {noise:.0f} with it on; skipped {skipped:.1f}s while it went quiet)')
         noise = cfg.duck_room
     verdict, frames, ep = record(cfg, mic, noise)
     if verdict == 'nothing':

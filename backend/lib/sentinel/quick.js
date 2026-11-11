@@ -6,6 +6,7 @@
 const { COLOR_MAP } = require('../color');
 
 const clean = (text) => String(text || '').toLowerCase()
+  .replace(/[\u2018\u2019]/g, "'")               // Whisper writes "that’s" with a curly apostrophe
   .replace(/^(hey\s+)?(alfred|sentinel|jarvis)\b[,\s]*/, '')
   .replace(/\b(please|for me|right now)\b/g, ' ')
   .replace(/[.!?,]/g, ' ').replace(/\s+/g, ' ').trim();

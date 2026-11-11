@@ -132,3 +132,24 @@ class SpeechOverTv(unittest.TestCase):
         # Nov 9: room 300 with the TV on, Josh talking at ~700 - missed at 3x, heard at 2x
         self.assertEqual(run(L.Endpointer(300), frames((0.3, 300), (1.2, 700), (1.5, 300)))[0], 'done')
         self.assertEqual(run(L.Endpointer(300, ratio=3.0), frames((0.3, 300), (1.2, 700), (5, 300)))[0], 'nothing')
+
+
+class FakeMic:
+    def __init__(self, levels):
+        self.levels = list(levels)
+    def frame(self):
+        level = self.levels.pop(0) if self.levels else 0
+        return np.full(L.FRAME, level, dtype=np.int16)
+
+
+class DuckSettle(unittest.TestCase):
+    def test_skips_the_song_until_the_tv_goes_quiet(self):
+        # Nov 11: TV at ~900 kept playing for ~1s after the mute was sent
+        n = int(1.0 / L.FRAME_S)
+        mic = FakeMic([900] * n + [100] * 50)
+        skipped = L.wait_for_duck(mic, 900)
+        self.assertAlmostEqual(skipped, (n + 1) * L.FRAME_S, places=3)
+
+    def test_gives_up_after_max(self):
+        mic = FakeMic([900] * 100)
+        self.assertLessEqual(L.wait_for_duck(mic, 900, max_s=1.5), 1.5 + L.FRAME_S)

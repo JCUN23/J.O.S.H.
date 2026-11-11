@@ -104,7 +104,11 @@ async function pickDevice(want, headers) {
   if (found) return { device: found };
   // Maybe it's a Frame TV with Spotify closed: open Spotify there and wait for it.
   const frame = require('./frameTv');
-  const r = await frame.apply({ only: want, power: true, artMode: false, app: 'Spotify' });
+  const t0 = Date.now();
+  // fresh:false: a Spotify already open in the background comes forward instead of being
+  // closed and cold-started (Nov 11: 30s to start Discover Weekly on the Frame)
+  const r = await frame.apply({ only: want, power: true, artMode: false, app: 'Spotify', fresh: false });
+  const tvMs = Date.now() - t0;
   if (/^TV: (no TV matched|none configured)/.test(r) || /app error/.test(r)) {
     const have = devices.map((d) => d.name).join(', ') || 'none';
     return { error: `No Spotify device called "${want}" (available: ${have}).${/app error/.test(r) ? ` Opening Spotify on the TV failed: ${r}` : ''}` };
@@ -115,8 +119,12 @@ async function pickDevice(want, headers) {
     await delay(pollMs);
     const now = await listDevices(headers);
     const d = matchName(now, want) || now.find((x) => !before.has(x.id) && x.type === 'TV');
-    if (d) return { device: d };
+    if (d) {
+      console.log(`🎵 Spotify on ${want}: TV steps ${(tvMs / 1000).toFixed(1)}s (${r}); showed up as a Spotify device ${((Date.now() - t0 - tvMs) / 1000).toFixed(1)}s later`);
+      return { device: d };
+    }
   }
+  console.log(`🎵 Spotify on ${want}: TV steps ${(tvMs / 1000).toFixed(1)}s (${r}); never showed up as a Spotify device`);
   return { error: `Opened Spotify on ${want}, but it didn't show up as a Spotify device. Is the TV's Spotify app signed in?` };
 }
 

@@ -464,7 +464,7 @@ async function powerOff(tv) {
 // is also asked for, so "Goodnight" at 11:30 PM doesn't light up a TV that's already off.
 // Once power:true has succeeded the TV is known to be on: no second status check, which
 // could time out and wrongly skip the steps after it.
-async function applyOne(tv, { power, artMode, app, mute, home }) {
+async function applyOne(tv, { power, artMode, app, mute, home, fresh = true }) {
   const did = [];
   if (power === false) { did.push(await powerOff(tv)); return did; }
   let on = false;
@@ -490,7 +490,7 @@ async function applyOne(tv, { power, artMode, app, mute, home }) {
   if (app) {
     if (justWoke) await delay(opt().wakeSettleMs);           // just woke: app framework still booting
     else if (artMode === false) await delay(opt().settleMs); // let it leave art mode first
-    try { did.push(`opened ${await launchApp(tv, app, { fresh: true })}`); }
+    try { did.push(`opened ${await launchApp(tv, app, { fresh })}`); }
     catch (err) {
       did.push(`app error: ${err.message}`);
       // HOME only when nothing was launched: pressing it over a slow-starting app kills it

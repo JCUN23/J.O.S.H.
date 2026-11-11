@@ -154,7 +154,7 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "system_status",
-      description: "Health of the Raspberry Pi that runs you: CPU temperature, CPU load, RAM, disk space, uptime, throttling or power problems. Use for 'how's the Pi doing', 'is the server hot', 'how much memory is free'.",
+      description: "Health of the Raspberry Pi that runs you: CPU temperature, CPU load, RAM, disk space, uptime, throttling or power problems. Use for 'how's the Pi doing', 'is the server hot', 'how much memory is free'. Speech-to-text may write Pi as 'pie': 'how's my pie doing' means this, not the printer.",
       parameters: { type: "object", properties: {} }
     }
   },
@@ -181,7 +181,7 @@ const SENTINEL_TOOLS = [
           query: { type: "string", description: "What to play: artist, song, album, playlist name, genre or mood (e.g. 'Tyler the Creator', 'Discover Weekly', 'chill lo-fi')" },
           kind: { type: "string", enum: ["playlist", "album", "artist", "track"], description: "Set when Josh says what it is ('my workout playlist', 'the album ...')" },
           device: { type: "string", description: "Where to play, if Josh names a place or device (e.g. 'The Frame', 'office', 'phone'). Omit to use the active device." },
-          set_lights: { type: "boolean", description: "Whether to set room lights to match the album art colors. Default true for mood/vibe requests, false for simple play requests." }
+          set_lights: { type: "boolean", description: "Set the room lights to the album art colors. ONLY true when Josh asks for it ('match the lights', 'sync the lights', 'set the mood with the lights'). Default false." }
         },
         required: ["query"]
       }

@@ -270,7 +270,8 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
       }
 
       // Step 3: Extract dominant color from album/artist art
-      if (args.set_lights !== false && imageUrl) {
+      // Only when asked (Nov 11: "play Discover Weekly on the Frame" also recolored the lights)
+      if (args.set_lights === true && imageUrl) {
         try {
           // Download the image and resize to 1x1 pixel to get average color.
           // sharp handles this efficiently — no heavy image processing.

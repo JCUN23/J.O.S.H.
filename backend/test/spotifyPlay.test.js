@@ -76,7 +76,7 @@ test('device by name; The Frame with Spotify closed gets Spotify opened, then pi
   state.devicesAfterLaunch = [...state.devices, { id: 'tv1', name: '[TV] Samsung 7 Series (55)', type: 'TV' }];
   const r = await sp.pickDevice('The Frame', H);
   assert.equal(r.device.id, 'tv1');
-  assert.deepEqual(state.tvCalls.at(-1), { only: 'The Frame', power: true, artMode: false, app: 'Spotify' });
+  assert.deepEqual(state.tvCalls.at(-1), { only: 'The Frame', power: true, artMode: false, app: 'Spotify', fresh: false }, 'resume a backgrounded Spotify, never close it');
 });
 
 test('unknown device: says what exists; TV app failure is reported', async () => {

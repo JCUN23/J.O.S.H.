@@ -13,7 +13,9 @@ const router = express.Router();
 
 const STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 // Spelling hints for Whisper: names it would otherwise mangle.
-const STT_PROMPT = 'Alfred, Sentinel. Govee, Hue, Frame TV, Spotify, Game Day, Lions, Pistons, Michigan, Barça.';
+// Vocabulary hint for Whisper: the house's proper nouns (Nov 11: "Pi" came out "pie",
+// "Discover Weekly" as "discoger"). STT_EXTRA_WORDS in .env adds more.
+const STT_PROMPT = `Alfred, Sentinel. How's my Raspberry Pi doing? Play Discover Weekly on The Frame. Govee, Hue Go, Frame TV, Spotify, Peacock, YouTube, Game Day, Lions, Pistons, Michigan, Barça, Bambu printer.${process.env.STT_EXTRA_WORDS ? ` ${process.env.STT_EXTRA_WORDS}` : ''}`;
 const LISTENER_STALE_MS = 150_000;   // heartbeats come every 60 s
 const SPEAKING_MAX_MS = 60_000;      // a panel that never says "done" can't mute the Pi for long
 
@@ -50,7 +52,10 @@ function fromPi(req, res, next) {
 
 // Whisper hears "Alfred, lights off" when the command follows the wake word without a
 // pause, and invents short phrases from silence. Strip the first, drop the second.
-const JUNK = new Set(['', 'you', 'thank you', 'thanks', 'thanks for watching', 'bye', 'okay', 'hmm']);
+// "thanks" / "thank you" / "bye" used to be here (Whisper invents them from silence), but
+// they're real sign-offs now (lib/sentinel/quick.js) and the endpointer only sends audio
+// that had speech in it.
+const JUNK = new Set(['', 'you', 'thanks for watching', 'okay', 'hmm']);
 function cleanTranscript(text) {
   const t = String(text || '').trim()
     .replace(/^(hey[\s,]+)?(alfred|jarvis|sentinel)\b[\s,.!?]*/i, '')

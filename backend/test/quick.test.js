@@ -52,6 +52,7 @@ test('sign-offs end the conversation; "thanks, now ..." is still a command (Nov 
     assert.ok(r.response.length > 0 && calls.length === 0, `${said}: replies, runs nothing`);
   }
   assert.equal((await quickCommand('good night Alfred')).response, 'Good night.');
+  assert.ok((await quickCommand('That’s all.'))?.endConversation, 'curly apostrophe from Whisper');
   for (const said of ["Thanks. Now set the lights to white while you're at it.", 'thanks for the weather, what about tomorrow',
     'thank you, play discover weekly', 'tell me that is all']) {
     assert.equal(await quickCommand(said), null, `${said}: goes to the AI`);

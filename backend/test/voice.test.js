@@ -55,7 +55,8 @@ T.setFetch(async (url, opts) => {
 test('cleanTranscript strips the wake phrase and drops Whisper silence junk', () => {
   assert.equal(T.cleanTranscript('Hey Jarvis, turn off the lights.'), 'turn off the lights.');
   assert.equal(T.cleanTranscript('Jarvis what games are on today?'), 'what games are on today?');
-  assert.equal(T.cleanTranscript(' Thank you. '), '');
+  assert.equal(T.cleanTranscript(' Thanks for watching. '), '');
+  assert.equal(T.cleanTranscript(' Thank you. '), 'Thank you.', 'a real sign-off now (Nov 11), not junk');
   assert.equal(T.cleanTranscript('you'), '');
   assert.equal(T.cleanTranscript('Hey Jarvis.'), '');
   assert.equal(T.cleanTranscript('Alfred, turn off the lights.'), 'turn off the lights.');
@@ -132,7 +133,7 @@ test('silence or junk -> nothing; speech-to-text failure -> 502 + error event', 
   const panel = await stream(app.base, true);
   t.after(async () => { panel.close(); T.reset(); await app.close(); });
   assert.deepEqual((await postWav(app.base, Buffer.alloc(0))).body, { text: '', handledBy: null });
-  sttText = 'Thank you.';
+  sttText = 'Thanks for watching.';
   assert.deepEqual((await postWav(app.base, WAV)).body, { text: '', handledBy: null });
   await panel.waitFor('nothing');
   sttText = new Error('x');
