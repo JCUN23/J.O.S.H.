@@ -42,3 +42,18 @@ test('a failure is reported, never a cheerful "Done."', async () => {
   const r = await quickCommand('lights off');
   assert.match(r.response, /Neon Rope/);
 });
+
+test('sign-offs end the conversation; "thanks, now ..." is still a command (Nov 11)', async () => {
+  for (const said of ['Thanks.', 'thank you', 'Thank you so much, Alfred', "that's all", 'That will be all.', "ok that's it",
+    "I'm good", 'never mind', 'nope', 'cool thanks', 'all set', 'stop listening', 'perfect, thanks man']) {
+    calls.length = 0;
+    const r = await quickCommand(said);
+    assert.ok(r?.endConversation, said);
+    assert.ok(r.response.length > 0 && calls.length === 0, `${said}: replies, runs nothing`);
+  }
+  assert.equal((await quickCommand('good night Alfred')).response, 'Good night.');
+  for (const said of ["Thanks. Now set the lights to white while you're at it.", 'thanks for the weather, what about tomorrow',
+    'thank you, play discover weekly', 'tell me that is all']) {
+    assert.equal(await quickCommand(said), null, `${said}: goes to the AI`);
+  }
+});

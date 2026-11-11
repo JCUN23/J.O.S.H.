@@ -389,12 +389,14 @@ const BatcomputerHub = () => {
 
     let responseText = '';
     let musicPlaying = false;
+    let endConversation = false;   // "thanks" / "that's all": no follow-up listening
     try {
       // Process command locally (free, no API needed)
       const result = await processCommand(command, getGoogleCalendarEvents);
       (result?.panelActions || []).forEach((a) => applyPanelActionRef.current(a));
       responseText = result?.response || result || '';
       musicPlaying = result?.musicPlaying || false;
+      endConversation = result?.endConversation || false;
       console.log('[Sentinel] Response:', responseText, musicPlaying ? '(music playing)' : '');
     } catch (err) {
       console.error('Command error:', err);
@@ -441,8 +443,8 @@ const BatcomputerHub = () => {
     setProcessing(false);
     processingRef.current = false;
 
-    // In wake word mode, stay active for follow-up commands
-    if (wakeWordEnabledRef.current) {
+    // In wake word mode, stay active for follow-up commands (not after a sign-off)
+    if (wakeWordEnabledRef.current && !endConversation) {
       console.log('[Sentinel] Ready for follow-up command (listening for 8 seconds of silence)...');
       setAwaitingCommand(true);
       awaitingCommandRef.current = true;
@@ -465,7 +467,7 @@ const BatcomputerHub = () => {
       setAwaitingCommand(false);
       awaitingCommandRef.current = false;
     }
-    return { musicPlaying };
+    return { musicPlaying, endConversation };
   }, [speak]);
 
   // Pi mic (voice/listener.py): the Pi hears "Alfred" and the command, the backend
@@ -505,7 +507,7 @@ const BatcomputerHub = () => {
         setListening(false); setTranscript(text);
         reportSpeaking(true);
         let result;
-        try { result = await processVoiceCommandRef.current(text); } finally { reportSpeaking(false, { followup: !result?.musicPlaying }); }
+        try { result = await processVoiceCommandRef.current(text); } finally { reportSpeaking(false, { followup: !result?.musicPlaying && !result?.endConversation }); }
       },
       onNothing: () => { setListening(false); setTranscript(''); setResponse("Didn't catch that."); },
       onIdle: () => { setListening(false); setTranscript(''); },

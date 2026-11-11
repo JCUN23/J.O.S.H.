@@ -114,6 +114,17 @@ test('no panel open: Sentinel runs it here and the reply goes back to the Pi', a
   assert.equal((await viewer.waitFor('handled')).reply, 'Lights are off.');
 });
 
+test('no panel, a sign-off: Alfred answers and the Pi does NOT listen for a follow-up', async (t) => {
+  const restore = quiet(); t.after(restore);
+  T.reset(); sttText = 'Thanks, Alfred.';
+  T.setAgent(async () => ({ response: 'Anytime.', toolsExecuted: [], endConversation: true }));
+  const app = await startApp(voice);
+  t.after(async () => { T.reset(); await app.close(); });
+  const r = await postWav(app.base, WAV);
+  assert.equal(r.body.reply, 'Anytime.');
+  assert.equal(r.body.followup, false);
+});
+
 test('silence or junk -> nothing; speech-to-text failure -> 502 + error event', async (t) => {
   const restore = quiet(); t.after(restore);
   T.reset();

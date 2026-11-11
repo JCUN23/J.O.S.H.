@@ -134,10 +134,11 @@ router.post('/api/voice/utterance', fromPi, express.raw({ type: () => true, limi
   // No panel open: run it here.
   try {
     const spotifyToken = await require('./spotify').getSpotifyAccessToken().catch(() => null);
-    const { response, toolsExecuted = [] } = await agent(text, { spotifyToken });
+    const { response, toolsExecuted = [], endConversation } = await agent(text, { spotifyToken });
     const music = toolsExecuted.some((t) => t.tool === 'play_music' || (t.tool === 'control_spotify' && t.args?.action === 'play'));
     broadcast({ type: 'handled', text, reply: response });
-    return res.json({ text, handledBy: 'pi', reply: response, followup: !music });
+    // No follow-up after music (the mic would hear it) or a sign-off ("thanks, Alfred")
+    return res.json({ text, handledBy: 'pi', reply: response, followup: !music && !endConversation });
   } catch (err) {
     const detail = err.response?.data?.error?.message || err.message;
     console.warn(`🎙️  Sentinel failed on "${text}": ${detail}`);

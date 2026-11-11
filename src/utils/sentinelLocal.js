@@ -26,7 +26,8 @@ export async function processCommand(input) {
     const musicPlaying = tools.some((t) => t.tool === 'play_music' || (t.tool === 'control_spotify' && ['play', 'more_like_this'].includes(t.args?.action)));
     // "Show me the calendar", "dark mode", "lock the screen": the panel carries these out
     const panelActions = tools.filter((t) => t.tool === 'control_panel').map((t) => t.args || {});
-    return { response: data.response || 'Done.', musicPlaying, panelActions };
+    // "Thanks" / "that's all": the backend says the conversation is over
+    return { response: data.response || 'Done.', musicPlaying, panelActions, endConversation: Boolean(data.endConversation) };
 }
 
 const randomResponse = (list) => list[Math.floor(Math.random() * list.length)];

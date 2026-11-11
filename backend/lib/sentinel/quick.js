@@ -34,9 +34,19 @@ const INTENTS = [
   { re: /^(?:go to sleep|standby|go idle|screen off)$/, tool: 'control_panel', args: () => ({ action: 'idle' }) },
 ];
 
-// -> { response, toolsExecuted, quick: true } | null (not an instant command)
+// Sign-offs: answer and END the conversation, so neither the Pi mic nor the panel keeps
+// listening for a follow-up. Whole sentence only: "thanks, now set the lights to white"
+// (Nov 9) is a real command and goes to the AI.
+const SIGN_OFF = /^(?:(?:ok(?:ay)?|cool|great|perfect|awesome|nice|got it|alright|all right) )?(?:thanks?(?: you)?(?: so much| a lot)?|thank you|thx|ty|cheers|that(?:'s| is| will be|'ll be) (?:all|it|everything)|that's all for now|i'm (?:good|all set|done)|we're (?:good|done|all set)|all set|all good|never ?mind|nothing|no thanks?(?: you)?|nope|no|stop listening|go to sleep alfred|goodbye|bye|good ?night)(?: (?:alfred|buddy|man|bro|dude))?$/;
+const SIGN_OFF_REPLIES = ['Anytime.', 'You got it.', 'Happy to help.', 'Of course.', 'At your service.'];
+
+// -> { response, toolsExecuted, quick: true, endConversation? } | null (not an instant command)
 async function quickCommand(message, ctx = {}) {
   const text = clean(message);
+  if (SIGN_OFF.test(text)) {
+    const night = /good ?night/.test(text);
+    return { response: night ? 'Good night.' : pick(SIGN_OFF_REPLIES), toolsExecuted: [], quick: true, endConversation: true };
+  }
   for (const intent of INTENTS) {
     const m = text.match(intent.re);
     if (!m) continue;
@@ -49,4 +59,4 @@ async function quickCommand(message, ctx = {}) {
   return null;
 }
 
-module.exports = { quickCommand, clean };
+module.exports = { quickCommand, clean, SIGN_OFF };

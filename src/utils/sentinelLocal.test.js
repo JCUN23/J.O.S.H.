@@ -20,7 +20,12 @@ describe('processCommand', () => {
         expect(calls).toHaveLength(1);
         expect(calls[0].url).toBe('/api/sentinel/chat');
         expect(calls[0].body.message).toBe('turn off the lights');
-        expect(r).toEqual({ response: 'Lights off.', musicPlaying: false, panelActions: [] });
+        expect(r).toEqual({ response: 'Lights off.', musicPlaying: false, panelActions: [], endConversation: false });
+    });
+
+    it('"thanks": the backend ends the conversation, so the panel stops listening', async () => {
+        reply = { status: 200, body: { response: 'Anytime.', toolsExecuted: [], endConversation: true } };
+        expect((await processCommand('thanks')).endConversation).toBe(true);
     });
 
     it('flags music so the panel mic waits before listening again', async () => {
