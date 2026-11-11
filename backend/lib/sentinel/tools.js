@@ -250,7 +250,7 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "get_briefing",
-      description: "Josh's rundown of the day in one go: weather, today's calendar, his teams' games, today's reminders. Use for 'brief me', 'what's my day look like', 'catch me up'. Read it out as returned.",
+      description: "Josh's rundown of the day in one go: weather, today's calendar, his teams' games, today's reminders. Use ONLY when Josh explicitly asks for a briefing or rundown ('brief me', 'what's my day look like', 'catch me up'). Never for anything else, and never for unclear or garbled input (song lyrics, TV audio): for those, say you didn't catch it. Read it out as returned.",
       parameters: { type: "object", properties: {} }
     }
   },

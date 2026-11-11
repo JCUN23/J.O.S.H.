@@ -192,7 +192,12 @@ router.get('/api/voice/events', (req, res) => {
 
 // Something for Alfred to say out loud on the voice panel (timers, reminders, briefings).
 // Returns false when no panel is open.
-router.announce = (text) => sendToOnePanel({ type: 'announce', text });
+// Everything Alfred says unprompted goes through here: log it, so "why did he say that?"
+// has an answer (Nov 11: the briefing every ~2 minutes)
+router.announce = (text, source = 'unknown') => {
+  console.log(`📢 Alfred announces (${source}): "${String(text).slice(0, 120)}"`);
+  return sendToOnePanel({ type: 'announce', text });
+};
 
 router._test = {
   cleanTranscript,

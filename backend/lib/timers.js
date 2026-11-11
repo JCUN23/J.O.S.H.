@@ -95,7 +95,7 @@ const announcement = (t, late) => (t.kind === 'timer'
 
 // Default announcer: speak on the voice panel, push to the phone, log it.
 async function announce(t, text) {
-  try { require('../routes/voice').announce(text); } catch { /* no panel open */ }
+  try { require('../routes/voice').announce(text, 'timers'); } catch { /* no panel open */ }
   require('./notify').notify({ title: t.kind === 'timer' ? 'Timer done' : 'Reminder', message: text, category: 'reminder', priority: 4, tags: [t.kind === 'timer' ? 'alarm_clock' : 'bell'] });
   require('./activity').log({ source: 'voice', title: t.kind === 'timer' ? 'Timer done' : 'Reminder', results: [text] });
 }

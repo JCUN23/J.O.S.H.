@@ -157,7 +157,7 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
   if (toolName === 'undo_calendar_event') return require('../calendar').undoLast();
 
   // ===== BRIEFING ("brief me", "what's my day look like") =====
-  if (toolName === 'get_briefing') return require('../briefing').compose('ask');
+  if (toolName === 'get_briefing') { console.log('🧾 get_briefing called by the AI'); return require('../briefing').compose('ask'); }
 
   // ===== TIMERS & REMINDERS (lib/timers.js) =====
   if (toolName === 'set_timer') return require('../timers').setTimer(args);

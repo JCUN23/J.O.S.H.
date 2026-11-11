@@ -88,7 +88,7 @@ async function tick(now = new Date(), { fetchImpl = fetch, say = announce } = {}
 }
 
 async function announce(text) {
-  try { require('../routes/voice').announce(text); } catch { /* no panel */ }
+  try { require('../routes/voice').announce(text, 'gameAlerts'); } catch { /* no panel */ }
   require('./notify').notify({ title: text.split(/[.!:]/)[0], message: text, category: 'game', priority: 3, tags: ['sports_medal'] });
 }
 

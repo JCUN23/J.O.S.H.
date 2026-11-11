@@ -93,7 +93,7 @@ async function tick(now = new Date(), { fetchImpl, say = announce } = {}) {
 }
 
 async function announce(text, a) {
-  try { require('../routes/voice').announce(text); } catch { /* no panel */ }
+  try { require('../routes/voice').announce(text, 'weatherAlerts'); } catch { /* no panel */ }
   require('./notify').notify({ title: text.replace(/^Heads up: /, '').split('.')[0], message: text, category: 'weather',
     priority: a?.precip?.kind === 'storm' ? 4 : 3, tags: [a?.precip?.kind === 'snow' ? 'snowflake' : a?.freeze ? 'cold_face' : 'umbrella'] });
 }
