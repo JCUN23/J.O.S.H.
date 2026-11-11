@@ -143,13 +143,23 @@ class FakeMic:
 
 
 class DuckSettle(unittest.TestCase):
-    def test_skips_the_song_until_the_tv_goes_quiet(self):
+    def test_music_alone_is_kept_but_is_not_speech(self):
         # Nov 11: TV at ~900 kept playing for ~1s after the mute was sent
         n = int(1.0 / L.FRAME_S)
-        mic = FakeMic([900] * n + [100] * 50)
-        skipped = L.wait_for_duck(mic, 900)
-        self.assertAlmostEqual(skipped, (n + 1) * L.FRAME_S, places=3)
+        frames, spoke = L.wait_for_duck(FakeMic([900] * n + [100] * 50), 900)
+        self.assertEqual(len(frames), n + 1)
+        self.assertFalse(spoke)
 
-    def test_gives_up_after_max(self):
-        mic = FakeMic([900] * 100)
-        self.assertLessEqual(L.wait_for_duck(mic, 900, max_s=1.5), 1.5 + L.FRAME_S)
+    def test_talking_over_the_music_is_kept_and_counts(self):
+        # Nov 11: "Play Discover Weekly on the Frame" came out "Weakly on the frame"
+        frames, spoke = L.wait_for_duck(FakeMic([900, 2500, 2600, 2400] * 10), 900)
+        self.assertTrue(spoke)
+        self.assertLessEqual(len(frames) * L.FRAME_S, 1.5 + L.FRAME_S)
+
+    def test_record_keeps_the_prefix_audio(self):
+        cfg = type('C', (), dict(end_silence=1.0, max_s=10.0, min_level=60.0, speech_ratio=2.0))()
+        prefix = [np.full(L.FRAME, 2500, dtype=np.int16)] * 5
+        verdict, frames, _ = L.record(cfg, FakeMic([100] * 40), 120, prefix=prefix, started=True)
+        self.assertEqual(verdict, 'done')
+        self.assertEqual(len(frames[:5]), 5)
+        self.assertTrue(all(L.rms(f) > 2000 for f in frames[:5]))

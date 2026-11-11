@@ -343,23 +343,32 @@ def run(cfg):
             cooldown_until = time.time() + 1.5
 
 
-def wait_for_duck(mic, loud_noise, max_s=1.5):
-    """The backend just muted the TV, but it takes ~1s to go quiet (Nov 11: the song in that
-    second was recorded as the command). Skip audio until the room drops well below the
-    TV-on level, or max_s passes. -> seconds skipped"""
-    skipped = 0.0
-    while skipped < max_s:
+def wait_for_duck(mic, loud_noise, ratio=2.0, max_s=1.5):
+    """The backend just muted the TV, but it takes ~1s to go quiet. In that window music
+    alone mustn't start a command (Nov 11: a song got transcribed), but Josh talking over it
+    must not be thrown away either (Nov 11, later: skipping it turned "Play Discover Weekly
+    on the Frame" into "Weakly on the frame"). So: keep the audio; it only counts as speech
+    when it's clearly louder than the music. -> (frames, spoke)"""
+    frames, spoke, waited = [], False, 0.0
+    while waited < max_s:
         f = mic.frame()
-        skipped += FRAME_S
-        if rms(f) < loud_noise * 0.5:
-            break
-    return skipped
+        frames.append(f)
+        waited += FRAME_S
+        level = rms(f)
+        if level > loud_noise * ratio:
+            spoke = True                    # talking over the music
+        if level < loud_noise * 0.5:
+            break                           # the TV has gone quiet
+    return frames, spoke
 
 
-def record(cfg, mic, noise, start_timeout=5.0):
-    """-> (verdict, frames): 'done' with the command's audio, or 'nothing'"""
+def record(cfg, mic, noise, start_timeout=5.0, prefix=None, started=False):
+    """-> (verdict, frames): 'done' with the command's audio, or 'nothing'.
+    prefix: audio already captured (the TV-muting window); started: speech was in it."""
     ep = Endpointer(noise, end_silence=cfg.end_silence, max_s=cfg.max_s, start_timeout=start_timeout, min_level=cfg.min_level, ratio=cfg.speech_ratio)
-    frames = []
+    if started:
+        ep.started = True
+    frames = list(prefix or [])
     while True:
         f = mic.frame()
         frames.append(f)
@@ -413,12 +422,13 @@ def handle_command(cfg, api, mic, speaker, noise):
     if not r.get('listen'):
         log(f'  ignored: {r.get("why", "backend said no")}')
         return
+    prefix, spoke = [], False
     if r.get('ducked') and noise > cfg.duck_room:
         # The noise floor was measured with the TV playing; it's muted now
-        skipped = wait_for_duck(mic, noise)
-        log(f'  TV muted for the command (room was {noise:.0f} with it on; skipped {skipped:.1f}s while it went quiet)')
+        prefix, spoke = wait_for_duck(mic, noise, ratio=cfg.speech_ratio)
+        log(f'  TV muted for the command (room was {noise:.0f} with it on; {len(prefix) * FRAME_S:.1f}s while it went quiet{", you were talking" if spoke else ""})')
         noise = cfg.duck_room
-    verdict, frames, ep = record(cfg, mic, noise)
+    verdict, frames, ep = record(cfg, mic, noise, prefix=prefix, started=spoke)
     if verdict == 'nothing':
         log(f'  no command heard (room {noise:.0f}, needed {ep.thr:.0f}, loudest {max(rms(f) for f in frames):.0f})')
         api.utterance(b'')
