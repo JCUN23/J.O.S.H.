@@ -101,6 +101,21 @@ test('while the panel is speaking, wake words are ignored', async (t) => {
   assert.equal((await app.call('POST', '/api/voice/wake', {}, { 'X-Voice-Token': 'vt' })).body.listen, true);
 });
 
+test('barge-in: a confident "Alfred" over the reply hushes the panel and listens (Nov 11)', async (t) => {
+  const restore = quiet(); t.after(restore);
+  T.reset();
+  const app = await startApp(voice);
+  const panel = await stream(app.base, true);
+  t.after(async () => { panel.close(); T.reset(); await app.close(); });
+  await app.call('POST', '/api/voice/speaking', { speaking: true });
+  const pi = { 'X-Voice-Token': 'vt' };
+  assert.equal((await app.call('POST', '/api/voice/wake', { score: 0.6 }, pi)).body.listen, false, 'his own voice / a weak wake: ignored');
+  assert.equal((await app.call('POST', '/api/voice/wake', { score: 0.85 }, pi)).body.listen, true);
+  await panel.waitFor('stop');
+  await panel.waitFor('wake');
+  assert.equal((await app.call('GET', '/api/voice/status')).body.speaking, false, 'no longer speaking');
+});
+
 test('no panel open: Sentinel runs it here and the reply goes back to the Pi', async (t) => {
   const restore = quiet(); t.after(restore);
   T.reset(); sttText = 'Jarvis, lights off';

@@ -110,8 +110,18 @@ async function duckTv() {
   return ducked;
 }
 
-router.post('/api/voice/wake', fromPi, async (req, res) => {
-  if (Date.now() < speakingUntil) return res.json({ listen: false, why: 'panel is speaking' });
+// Barge-in (Nov 11): "Alfred" while he's talking cuts him off and listens. It needs a
+// confident wake (the mic also hears his own voice); a weaker one is ignored as before.
+const BARGE_MIN = () => Number(process.env.VOICE_BARGE_THRESHOLD ?? 0.7);
+
+router.post('/api/voice/wake', express.json(), fromPi, async (req, res) => {
+  if (Date.now() < speakingUntil) {
+    const score = Number(req.body?.score);
+    if (!(BARGE_MIN() > 0 && score >= BARGE_MIN())) return res.json({ listen: false, why: 'panel is speaking' });
+    console.log(`🎙️  Barge-in (${score.toFixed(2)}): cutting Alfred off`);
+    broadcast({ type: 'stop' });
+    speakingUntil = 0;
+  }
   broadcast({ type: 'wake' });
   const ducked = await duckTv();
   res.json({ listen: true, panels: panelCount(), ducked });

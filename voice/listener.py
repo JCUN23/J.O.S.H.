@@ -90,6 +90,9 @@ class Config:
         self.duck_room = float(get('VOICE_DUCK_ROOM', '120'))
         self.followup_s = float(get('VOICE_FOLLOWUP_SECONDS', '6'))    # 0 = no follow-up listening
         self.followups = int(get('VOICE_FOLLOWUPS', '3'))              # follow-ups in a row
+        # "Alfred" while he's talking cuts him off. Stricter than a normal wake: the mic also
+        # hears his own voice from the panel. 0 = barge-in off.
+        self.barge_threshold = float(get('VOICE_BARGE_THRESHOLD', '0.7'))
 
 
 # ---------- end of speech ----------
@@ -335,7 +338,11 @@ def run(cfg):
                 continue
             log(f'Wake word ({score:.2f})')
             try:
-                handle_command(cfg, api, mic, speaker, noise_floor(recent))
+                # A barge-in ("Alfred" over his reply) starts the next command right away
+                barged = handle_command(cfg, api, mic, speaker, noise_floor(recent), score=score, model=model)
+                while barged:
+                    model.reset()
+                    barged = handle_command(cfg, api, mic, speaker, noise_floor(recent), score=barged, model=model)
             except Exception as e:
                 log(f'Command failed: {http_reason(e)}')
             model.reset()                       # forget the wake word's audio
@@ -401,9 +408,26 @@ def follow_up_allowed(res, status):
     return bool(status.get('followup', True)) and not status.get('speaking')
 
 
-def wait_until_quiet(api, grace=1.2, timeout=60.0):
-    """The panel is speaking the reply: wait for it to finish. -> last voice status"""
-    time.sleep(grace)                       # the panel reports 'speaking' a beat after the command lands
+def wait_until_quiet(api, grace=1.2, timeout=60.0, mic=None, model=None, barge=0.0):
+    """The panel is speaking the reply: wait for it to finish. -> last voice status, or
+    {'barged': score} when "Alfred" was said over him (barge-in; needs mic + model).
+    Without a mic it just sleeps between status checks, like before."""
+    poll_every = 0.3
+    def pause(seconds):
+        """Sleep, or (barge-in) keep feeding the wake word model for that long"""
+        if not (mic and model and barge > 0):
+            time.sleep(seconds)
+            return None
+        end = time.time() + seconds
+        while time.time() < end:
+            score = score_of(model.predict(mic.frame()))
+            if score >= barge:
+                return score
+        return None
+
+    hit = pause(grace)                      # the panel reports 'speaking' a beat after the command lands
+    if hit:
+        return {'barged': hit}
     end = time.time() + timeout
     status = {}
     while time.time() < end:
@@ -413,12 +437,16 @@ def wait_until_quiet(api, grace=1.2, timeout=60.0):
             return {'speaking': False, 'followup': False}
         if not status.get('speaking'):
             return status
-        time.sleep(0.3)
+        hit = pause(poll_every)
+        if hit:
+            return {'barged': hit}
     return status
 
 
-def handle_command(cfg, api, mic, speaker, noise):
-    r = api.post('/api/voice/wake', {})
+def handle_command(cfg, api, mic, speaker, noise, score=None, model=None):
+    """-> the wake score when Josh said "Alfred" over the reply (the caller starts a new
+    command right away), else None"""
+    r = api.post('/api/voice/wake', {'score': score} if score is not None else {})
     if not r.get('listen'):
         log(f'  ignored: {r.get("why", "backend said no")}')
         return
@@ -438,7 +466,10 @@ def handle_command(cfg, api, mic, speaker, noise):
 
     # Follow-ups: after Alfred answers, keep listening a few seconds without the wake word
     for _ in range(cfg.followups if cfg.followup_s > 0 else 0):
-        status = wait_until_quiet(api) if res.get('handledBy') == 'panel' else {}
+        status = wait_until_quiet(api, mic=mic, model=model, barge=cfg.barge_threshold) if res.get('handledBy') == 'panel' else {}
+        if status.get('barged'):
+            log(f'Wake word over the reply ({status["barged"]:.2f}): cutting him off')
+            return status['barged']
         if not follow_up_allowed(res, status):
             return
         mic.drain()                                         # nothing from while Alfred was talking

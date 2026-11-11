@@ -24,7 +24,7 @@ describe('piVoice', () => {
     });
 
     it('routes events to handlers and disconnects', () => {
-        const h = { onWake: vi.fn(), onTranscript: vi.fn(), onNothing: vi.fn(), onError: vi.fn() };
+        const h = { onWake: vi.fn(), onTranscript: vi.fn(), onNothing: vi.fn(), onError: vi.fn(), onStop: vi.fn() };
         const stop = connectPiVoice(h);
         const es = FakeEventSource.last;
         expect(es.url).toMatch(/\/api\/voice\/events\?panel=1$/);
@@ -33,11 +33,13 @@ describe('piVoice', () => {
         es.emit({ type: 'transcript', text: 'lights off' });
         es.emit({ type: 'nothing' });
         es.emit({ type: 'error', text: 'Pi mic: rate limited' });
+        es.emit({ type: 'stop' });                                   // barge-in
         es.onmessage({ data: 'not json' });
         expect(h.onWake).toHaveBeenCalledTimes(1);
         expect(h.onTranscript).toHaveBeenCalledWith('lights off');
         expect(h.onNothing).toHaveBeenCalledTimes(1);
         expect(h.onError).toHaveBeenCalledWith('Pi mic: rate limited');
+        expect(h.onStop).toHaveBeenCalledTimes(1);
         stop();
         expect(es.closed).toBe(true);
     });

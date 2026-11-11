@@ -28,7 +28,7 @@ export function setVoicePanel(on) {
 //   nothing    -> heard the wake word, then no words
 //   error      -> speech-to-text failed
 //   announce   -> something for Alfred to say (timer done, reminder, briefing)
-export function connectPiVoice({ onWake, onTranscript, onNothing, onError, onAnnounce, onIdle } = {}) {
+export function connectPiVoice({ onWake, onTranscript, onNothing, onError, onAnnounce, onIdle, onStop } = {}) {
     if (typeof EventSource === 'undefined') return () => {};
     const es = new EventSource(`${BACKEND_URL}/api/voice/events?panel=1`);
     const done = new Set();                                  // command ids already run
@@ -42,6 +42,7 @@ export function connectPiVoice({ onWake, onTranscript, onNothing, onError, onAnn
         else if (ev.type === 'idle') onIdle?.();                     // follow-up window ended in silence
         else if (ev.type === 'error') onError?.(ev.text || 'Pi mic error');
         else if (ev.type === 'announce' && ev.text) onAnnounce?.(ev.text);   // timers, reminders, briefings
+        else if (ev.type === 'stop') onStop?.();                             // "Alfred" said over him: hush
     };
     return () => es.close();
 }

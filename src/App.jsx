@@ -221,9 +221,22 @@ const BatcomputerHub = () => {
     return utteranceRef.current;
   }, []);
 
+  // Barge-in: stopSpeaking() cuts off whatever Alfred is saying (or about to say).
+  // speakGenRef bumps on every stop, so a reply still being fetched never starts playing.
+  const speakGenRef = useRef(0);
+  const speakDoneRef = useRef(null);
+  const stopSpeaking = useCallback(() => {
+    speakGenRef.current += 1;
+    try { audioRef.current?.pause(); } catch { /* nothing playing */ }
+    try { window.speechSynthesis?.cancel(); } catch { /* no browser TTS */ }
+    speakDoneRef.current?.();                // un-block the code waiting for the reply to end
+    speakDoneRef.current = null;
+  }, []);
+
   // ElevenLabs TTS with browser fallback - returns promise that resolves when done speaking
   const speak = useCallback(async (shown) => {
     const text = forSpeech(shown);           // "54°F" -> "54 degrees"
+    const gen = speakGenRef.current;
     console.log('[Sentinel] Speaking:', text);
 
     // Function to use browser TTS
@@ -244,6 +257,7 @@ const BatcomputerHub = () => {
             console.log('[Sentinel] Browser TTS error');
             resolve();
           };
+          speakDoneRef.current = resolve;
 
           window.speechSynthesis.speak(utterance);
         } else {
@@ -262,8 +276,10 @@ const BatcomputerHub = () => {
         body: JSON.stringify({ text })
       });
 
+      if (gen !== speakGenRef.current) return;      // cut off while the audio was being made
       if (response.ok) {
         const audioBlob = await response.blob();
+        if (gen !== speakGenRef.current) return;
         const audioUrl = URL.createObjectURL(audioBlob);
 
         // Stop any currently playing audio
@@ -282,6 +298,7 @@ const BatcomputerHub = () => {
 
           // Wait for it to finish (with 30s safety timeout)
           await new Promise((resolve) => {
+            speakDoneRef.current = resolve;          // stopSpeaking() resolves it early
             const timeout = setTimeout(() => {
               console.log('[Sentinel] ElevenLabs audio timed out');
               resolve();
@@ -311,7 +328,8 @@ const BatcomputerHub = () => {
       console.log('[Sentinel] ElevenLabs fetch failed:', err.message);
     }
 
-    // Use browser TTS as fallback
+    // Use browser TTS as fallback (unless he was cut off meanwhile)
+    if (gen !== speakGenRef.current) return;
     await speakWithBrowserTTS();
   }, []);
 
@@ -477,6 +495,8 @@ const BatcomputerHub = () => {
   useEffect(() => { processVoiceCommandRef.current = processVoiceCommand; }, [processVoiceCommand]);
   const speakRef = useRef(speak);
   useEffect(() => { speakRef.current = speak; }, [speak]);
+  const stopSpeakingRef = useRef(stopSpeaking);
+  useEffect(() => { stopSpeakingRef.current = stopSpeaking; }, [stopSpeaking]);
 
   // The idle screen saw Josh: the backend decides whether that earns a morning briefing or
   // a welcome home (once a day / once per arrival). Only the voice panel speaks it.
@@ -511,6 +531,11 @@ const BatcomputerHub = () => {
       },
       onNothing: () => { setListening(false); setTranscript(''); setResponse("Didn't catch that."); },
       onIdle: () => { setListening(false); setTranscript(''); },
+      // Barge-in: "Alfred" said over him. Hush now; the Pi is already listening.
+      onStop: () => {
+        stopSpeakingRef.current();
+        setListening(true); setTranscript('Listening…'); setResponse('');
+      },
       onError: (msg) => { setListening(false); setTranscript(''); setVoiceError(msg); },
       // Timers, reminders, briefings: say it (and show it) even if nobody asked just now
       onAnnounce: async (text) => {

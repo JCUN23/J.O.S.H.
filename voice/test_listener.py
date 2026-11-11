@@ -163,3 +163,35 @@ class DuckSettle(unittest.TestCase):
         self.assertEqual(verdict, 'done')
         self.assertEqual(len(frames[:5]), 5)
         self.assertTrue(all(L.rms(f) > 2000 for f in frames[:5]))
+
+
+class FakeModel:
+    def __init__(self, scores):
+        self.scores = list(scores)
+    def predict(self, frame):
+        return {'alfred': self.scores.pop(0) if self.scores else 0.0}
+
+
+class FakeApi:
+    def __init__(self, speaking_polls):
+        self.n = speaking_polls
+    def get(self, path, timeout=5):
+        self.n -= 1
+        return {'speaking': self.n >= 0, 'followup': True}
+
+
+class BargeIn(unittest.TestCase):
+    def test_alfred_over_the_reply_is_caught(self):
+        model = FakeModel([0.1] * 5 + [0.9])
+        st = L.wait_until_quiet(FakeApi(100), grace=0.05, timeout=5, mic=FakeMic([100] * 400), model=model, barge=0.7)
+        self.assertEqual(st, {'barged': 0.9})
+
+    def test_his_own_voice_below_the_bar_does_not_cut_him_off(self):
+        model = FakeModel([0.6] * 400)
+        st = L.wait_until_quiet(FakeApi(2), grace=0.05, timeout=5, mic=FakeMic([100] * 400), model=model, barge=0.7)
+        self.assertNotIn('barged', st)
+        self.assertFalse(st['speaking'])
+
+    def test_off_without_a_mic(self):
+        st = L.wait_until_quiet(FakeApi(1), grace=0.01, timeout=2)
+        self.assertNotIn('barged', st)
