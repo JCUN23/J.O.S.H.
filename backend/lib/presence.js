@@ -66,16 +66,20 @@ function observe(person, result, now = Date.now()) {
   s.lastResult = result; s.lastCheck = now;
   const set = (status) => { s.status = status; s.since = now; };
   if (result === 'home') {
-    s.lastHome = now;
+    s.lastHome = now; s.awayStreak = 0;
     if (s.status === 'home') return null;
     const wasAway = s.status === 'away';
     set('home');
     return wasAway ? 'arrive' : null;          // first sighting after a restart isn't an arrival
   }
   if (result === 'error') return null;
+  s.awayStreak = result === 'away' ? (s.awayStreak || 0) + 1 : 0;
   const quietFor = now - (s.lastHome ?? s.started);
   if (s.status === 'home' && quietFor >= LEAVE_AFTER_MS) { set('away'); return 'leave'; }
-  if (s.status === 'unknown' && (result === 'away' || quietFor >= LEAVE_AFTER_MS)) set('away');
+  // Just restarted, status unknown: ONE relayed ping (a napping phone) used to mark Josh
+  // away, so the next direct ping was an "arrival" and a "Welcome home" briefing, after
+  // every deploy (Nov 11). Away now takes 3 away results in a row, or the full timeout.
+  if (s.status === 'unknown' && (s.awayStreak >= 3 || quietFor >= LEAVE_AFTER_MS)) set('away');
   return null;
 }
 

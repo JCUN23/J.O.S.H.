@@ -66,6 +66,14 @@ test('presence: restart sighting is not an arrival; leave needs 10 quiet minutes
   assert.equal(presence.observe(p, 'away', t0 + 11 * 60000), 'leave');
   assert.equal(presence.observe(p, 'away', t0 + 30 * 60000), null);
   assert.equal(presence.observe(p, 'home', t0 + 60 * 60000), 'arrive');
+  // Nov 11: right after a restart, one relayed ping must not make the next direct one an "arrival"
+  presence._reset();
+  const t1 = t0 + 2 * 3600_000;
+  assert.equal(presence.observe(p, 'away', t1), null);
+  assert.equal(presence.observe(p, 'home', t1 + 60000), null, 'a napping phone after a deploy is not a homecoming');
+  presence._reset();
+  for (const m of [0, 1, 2]) assert.equal(presence.observe(p, 'away', t1 + m * 60000), null);
+  assert.equal(presence.observe(p, 'home', t1 + 3 * 60000), 'arrive', 'three away readings in a row: a real arrival');
 });
 
 test('presence -> rules: arrive after dark fires the scene once; daytime and cooldown block it', async () => {

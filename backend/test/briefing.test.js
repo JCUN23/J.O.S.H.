@@ -49,3 +49,12 @@ test('welcome home: the first sighting within 2 hours of getting home, once', as
   briefing.onPresence({ event: 'arrive' }, at(9, 18).getTime());
   assert.ok((await briefing.onArrived({ now: at(9, 21), sources })).skip, 'too long after arriving');
 });
+
+test('never two unprompted briefings within 2 hours, whatever triggers them (Nov 11)', async () => {
+  briefing._reset();
+  assert.match((await briefing.onArrived({ now: at(12, 9), sources })).text, /^Good morning/);
+  briefing.onPresence({ event: 'arrive' }, at(12, 10).getTime());     // a fake "arrival" after a deploy
+  assert.deepEqual(await briefing.onArrived({ now: at(12, 10, 5), sources }), { skip: 'briefed 65 min ago' });
+  briefing.onPresence({ event: 'arrive' }, at(12, 13).getTime());     // a real one, later
+  assert.match((await briefing.onArrived({ now: at(12, 13, 10), sources })).text, /^Welcome home/);
+});

@@ -54,21 +54,32 @@ function onPresence(e, now = Date.now()) {
 }
 
 // The panel saw Josh (camera or tap after the idle screen). -> { text } | { skip: reason }
+// Never more than one unprompted briefing in this window, whatever triggers it (Nov 11:
+// a welcome after every deploy). Asking for one ("brief me") is never limited.
+const MIN_GAP_MS = 2 * 3600_000;
+
 async function onArrived({ now = new Date(), sources } = {}) {
   if (process.env.BRIEFING === 'off') return { skip: 'briefings off' };
+  const last = store.get('lastBriefingAt');
+  if (last && now.getTime() - last < MIN_GAP_MS) {
+    welcomeUntil = 0;
+    return { skip: `briefed ${Math.round((now.getTime() - last) / 60000)} min ago` };
+  }
   if (now.getTime() < welcomeUntil) {
     welcomeUntil = 0;
     store.set('lastBriefing', dayKey(now));       // a welcome covers the morning one too
+    store.set('lastBriefingAt', now.getTime());
     return { text: await compose('welcome', { now, sources }) };
   }
   const h = now.getHours();
   if (h >= 5 && h < 12 && store.get('lastBriefing') !== dayKey(now)) {
     store.set('lastBriefing', dayKey(now));
+    store.set('lastBriefingAt', now.getTime());
     return { text: await compose('morning', { now, sources }) };
   }
   return { skip: 'already briefed / not morning' };
 }
 
-const _reset = () => { welcomeUntil = 0; store.clear('lastBriefing'); };
+const _reset = () => { welcomeUntil = 0; store.clear('lastBriefing'); store.clear('lastBriefingAt'); };
 
 module.exports = { compose, onPresence, onArrived, _reset };
