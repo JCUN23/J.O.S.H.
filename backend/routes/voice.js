@@ -112,7 +112,7 @@ async function duckTv() {
 
 // Barge-in (Nov 11): "Alfred" while he's talking cuts him off and listens. It needs a
 // confident wake (the mic also hears his own voice); a weaker one is ignored as before.
-const BARGE_MIN = () => Number(process.env.VOICE_BARGE_THRESHOLD ?? 0.7);
+const BARGE_MIN = () => Number(process.env.VOICE_BARGE_THRESHOLD ?? 0.6);
 
 router.post('/api/voice/wake', express.json(), fromPi, async (req, res) => {
   if (Date.now() < speakingUntil) {

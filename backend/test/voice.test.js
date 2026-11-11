@@ -109,7 +109,7 @@ test('barge-in: a confident "Alfred" over the reply hushes the panel and listens
   t.after(async () => { panel.close(); T.reset(); await app.close(); });
   await app.call('POST', '/api/voice/speaking', { speaking: true });
   const pi = { 'X-Voice-Token': 'vt' };
-  assert.equal((await app.call('POST', '/api/voice/wake', { score: 0.6 }, pi)).body.listen, false, 'his own voice / a weak wake: ignored');
+  assert.equal((await app.call('POST', '/api/voice/wake', { score: 0.5 }, pi)).body.listen, false, 'his own voice / a weak wake: ignored');
   assert.equal((await app.call('POST', '/api/voice/wake', { score: 0.85 }, pi)).body.listen, true);
   await panel.waitFor('stop');
   await panel.waitFor('wake');

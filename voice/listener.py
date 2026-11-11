@@ -92,7 +92,7 @@ class Config:
         self.followups = int(get('VOICE_FOLLOWUPS', '3'))              # follow-ups in a row
         # "Alfred" while he's talking cuts him off. Stricter than a normal wake: the mic also
         # hears his own voice from the panel. 0 = barge-in off.
-        self.barge_threshold = float(get('VOICE_BARGE_THRESHOLD', '0.7'))
+        self.barge_threshold = float(get('VOICE_BARGE_THRESHOLD', '0.6'))
 
 
 # ---------- end of speech ----------
@@ -413,6 +413,7 @@ def wait_until_quiet(api, grace=1.2, timeout=60.0, mic=None, model=None, barge=0
     {'barged': score} when "Alfred" was said over him (barge-in; needs mic + model).
     Without a mic it just sleeps between status checks, like before."""
     poll_every = 0.3
+    peak = [0.0]
     def pause(seconds):
         """Sleep, or (barge-in) keep feeding the wake word model for that long"""
         if not (mic and model and barge > 0):
@@ -421,9 +422,16 @@ def wait_until_quiet(api, grace=1.2, timeout=60.0, mic=None, model=None, barge=0
         end = time.time() + seconds
         while time.time() < end:
             score = score_of(model.predict(mic.frame()))
+            peak[0] = max(peak[0], score)
             if score >= barge:
                 return score
         return None
+    def done(status):
+        # Nov 11: barge-in "didn't work" with nothing logged. Show the closest call, so a
+        # threshold that's too strict is visible (VOICE_BARGE_THRESHOLD).
+        if mic and model and barge > 0 and peak[0] >= 0.2:
+            log(f'  (while he talked, the best "Alfred" scored {peak[0]:.2f}; barge-in needs {barge})')
+        return status
 
     hit = pause(grace)                      # the panel reports 'speaking' a beat after the command lands
     if hit:
@@ -436,11 +444,11 @@ def wait_until_quiet(api, grace=1.2, timeout=60.0, mic=None, model=None, barge=0
         except Exception:
             return {'speaking': False, 'followup': False}
         if not status.get('speaking'):
-            return status
+            return done(status)
         hit = pause(poll_every)
         if hit:
             return {'barged': hit}
-    return status
+    return done(status)
 
 
 def handle_command(cfg, api, mic, speaker, noise, score=None, model=None):
