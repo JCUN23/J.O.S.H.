@@ -25,8 +25,9 @@ const DEFAULT_RULES = [
     trigger: { type: 'sun', event: 'sunset', offsetMin: 0 }, action: { scene: 'relax' } },
   { id: 'weeknight-goodnight', name: 'Goodnight on school nights', enabled: false,
     trigger: { type: 'time', at: '23:30', days: [0, 1, 2, 3, 4] }, action: { scene: 'goodnight' } },
-  { id: 'weekday-focus', name: 'Focus lighting on weekday mornings', enabled: false,
-    trigger: { type: 'time', at: '08:30', days: [1, 2, 3, 4, 5] }, action: { scene: 'focus' } },
+  // id kept from when this was Focus (changing it would duplicate the rule on old installs)
+  { id: 'weekday-focus', name: 'Relax lighting on weekday mornings', enabled: false,
+    trigger: { type: 'time', at: '08:30', days: [1, 2, 3, 4, 5] }, action: { scene: 'relax' } },
   { id: 'arrive-after-dark', name: 'Lights on when someone gets home after dark', enabled: false,
     trigger: { type: 'presence', event: 'arrive', who: 'anyone' }, conditions: { dark: true }, action: { scene: 'relax' } },
   { id: 'everyone-left', name: 'Everything off when everyone leaves', enabled: false,
@@ -44,15 +45,44 @@ const home = () => {
   return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
 };
 
+// One-time changes to rules already saved on an install. Each runs once (flagged), and
+// only touches a rule nobody has edited, so it never undoes Josh's own changes.
+const MIGRATIONS = [
+  // Nov 11: Josh wants Relax, not Focus, on weekday mornings
+  { id: 'weekday-morning-relax', run: (rules) => rules.map((r) => (r.id === 'weekday-focus' && r.action?.scene === 'focus'
+    ? { ...r, name: 'Relax lighting on weekday mornings', action: { ...r.action, scene: 'relax' } } : r)) },
+];
+
 function list() {
   let rules = store.get('rules');
   if (!rules) { rules = DEFAULT_RULES; store.set('rules', rules); }
+  const done = store.get('migrations') || [];
+  const todo = MIGRATIONS.filter((m) => !done.includes(m.id));
+  if (todo.length) {
+    for (const m of todo) rules = m.run(rules);
+    store.set('rules', rules);
+    store.set('migrations', [...done, ...todo.map((m) => m.id)]);
+  }
   // Rules added in later versions show up (disabled) on installs that predate them.
   const missing = DEFAULT_RULES.filter((d) => !rules.some((r) => r.id === d.id));
   if (missing.length) { rules = [...rules, ...missing]; store.set('rules', rules); }
   return rules;
 }
 const get = (id) => list().find((r) => r.id === id) || null;
+
+// Point a rule at a different scene. The rule's name follows when it mentions the old
+// scene ("Focus lighting on weekday mornings" -> "Relax lighting on weekday mornings").
+function setScene(id, sceneQuery) {
+  const scene = scenes.find(sceneQuery);
+  if (!scene) return { error: `No scene called "${sceneQuery}". Scenes: ${scenes.list().map((s) => s.name).join(', ')}.` };
+  const rule = get(id);
+  if (!rule) return { error: `No rule "${id}"` };
+  const old = scenes.list().find((s) => s.id === rule.action?.scene);
+  const name = old ? rule.name.replace(new RegExp(old.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), scene.name) : rule.name;
+  const updated = { ...rule, name, action: { scene: scene.id } };
+  store.set('rules', list().map((r) => (r.id === id ? updated : r)));
+  return { rule: updated, from: old?.name || rule.action?.scene || 'custom actions', to: scene.name };
+}
 
 function setEnabled(id, enabled) {
   const rules = list().map((r) => (r.id === id ? { ...r, enabled: Boolean(enabled) } : r));
@@ -206,4 +236,4 @@ function startScheduler({ intervalMs = 30_000 } = {}) {
   console.log(`Rule scheduler on (every ${intervalMs / 1000}s)${home() ? '' : ' (sun rules off: set HOME_LAT/HOME_LON)'}`);
 }
 
-module.exports = { list, get, setEnabled, fire, tick, handlePresence, isDark, triggerTimeToday, describeTrigger, startScheduler, DEFAULT_RULES };
+module.exports = { _store: store, list, get, setEnabled, setScene, fire, tick, handlePresence, isDark, triggerTimeToday, describeTrigger, startScheduler, DEFAULT_RULES };

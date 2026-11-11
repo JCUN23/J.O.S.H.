@@ -108,9 +108,22 @@ async function executeTool(toolName, args, { spotifyToken } = {}) {
     const hits = rules.list().filter((r) => words.length && words.every((w) => `${r.name} ${r.id}`.toLowerCase().includes(w)));
     if (!hits.length) return `No rule matches "${args.name}". Rules: ${rules.list().map((r) => r.name).join(', ')}.`;
     if (hits.length > 1) return `Which one: ${hits.map((r) => r.name).join(', ')}?`;
-    const r = rules.setEnabled(hits[0].id, args.enabled !== false);
-    require('../activity').log({ source: 'voice', title: `Rule ${r.enabled ? 'on' : 'off'}: ${r.name}`, results: [`rule: ${r.enabled ? 'enabled' : 'disabled'}`] });
-    return `Turned ${r.enabled ? 'on' : 'off'} "${r.name}".`;
+    const said = [];
+    let id = hits[0].id;
+    if (args.scene) {
+      const r = rules.setScene(id, args.scene);
+      if (r.error) return r.error;
+      require('../activity').log({ source: 'voice', title: `Rule changed: ${r.rule.name}`, results: [`scene: ${r.from} -> ${r.to}`] });
+      said.push(`"${r.rule.name}" now runs ${r.to}`);
+    }
+    if (typeof args.enabled === 'boolean') {
+      const r = rules.setEnabled(id, args.enabled);
+      require('../activity').log({ source: 'voice', title: `Rule ${r.enabled ? 'on' : 'off'}: ${r.name}`, results: [`rule: ${r.enabled ? 'enabled' : 'disabled'}`] });
+      said.push(`turned ${r.enabled ? 'on' : 'off'} "${r.name}"`);
+    }
+    if (!said.length) return `"${hits[0].name}" is ${hits[0].enabled ? 'on' : 'off'}. Say whether to turn it on or off, or which scene it should run.`;
+    const text = said.join(', and ');
+    return `${text[0].toUpperCase()}${text.slice(1)}.${args.scene && !rules.get(id).enabled ? ' It is turned off right now; say "turn it on" to use it.' : ''}`;
   }
   if (toolName === 'activity_summary') {
     const all = require('../activity').list(50);

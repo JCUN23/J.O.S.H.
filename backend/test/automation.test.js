@@ -151,7 +151,7 @@ test('rules: a trigger missed while the host slept is logged, not silently skipp
     // laptop sleeps through 8:30, wakes at 10:53 (what happened Nov 6)
     assert.deepEqual(await rules.tick(mon(10, 53), { since: mon(8, 29) }), [], 'not fired 2h late');
     const [skip, pause] = activity.list(2);
-    assert.match(skip.title, /Skipped: Focus/);
+    assert.match(skip.title, /Skipped: Relax lighting on weekday mornings/);
     assert.equal(skip.ok, false, 'shows up red in the activity log');
     assert.match(pause.title, /Scheduler paused for 2h 24m/);
     const before = activity.list(200).length;
@@ -176,9 +176,29 @@ test('HTTP: scenes, rules, activity', async (t) => {
   assert.ok(rl.body.rules.every((r) => typeof r.when === 'string'));
   assert.equal((await app.call('PATCH', '/api/rules/weekday-focus', { enabled: 'yes' })).status, 400);
   assert.equal((await app.call('PATCH', '/api/rules/weekday-focus', { enabled: true })).body.rule.enabled, true);
+  // Change a rule's scene (Nov 11); the name follows the scene
+  const ch = await app.call('PATCH', '/api/rules/weekday-focus', { scene: 'Movie Night' });
+  assert.equal(ch.body.rule.name, 'Movie Night lighting on weekday mornings');
+  assert.equal((await app.call('PATCH', '/api/rules/weekday-focus', { scene: 'disco' })).status, 400);
+  assert.equal((await app.call('PATCH', '/api/rules/weekday-focus', {})).status, 400);
+  assert.equal((await app.call('PATCH', '/api/rules/nope', { scene: 'relax' })).status, 404);
+  assert.equal((await app.call('PATCH', '/api/rules/weekday-focus', { scene: 'relax' })).body.rule.name, 'Relax lighting on weekday mornings');
   assert.equal((await app.call('POST', '/api/rules/nope/run')).status, 404);
   assert.equal((await app.call('POST', '/api/rules/weekday-focus/run')).status, 200);
   const act = await app.call('GET', '/api/activity?limit=3');
   assert.equal(act.body.entries.length, 3);
   assert.match(act.body.entries[0].detail, /manually/);
+});
+
+test('migration: a saved Focus weekday rule becomes Relax once, and never undoes a later edit (Nov 11)', () => {
+  const store = rules._store;
+  const saved = store.get('rules');
+  try {
+    store.set('rules', saved.map((r) => (r.id === 'weekday-focus' ? { ...r, enabled: true, name: 'Focus lighting on weekday mornings', action: { scene: 'focus' } } : r)));
+    store.clear('migrations');
+    const r = rules.get('weekday-focus');
+    assert.deepEqual([r.name, r.action.scene, r.enabled], ['Relax lighting on weekday mornings', 'relax', true], 'switched, still enabled');
+    rules.setScene('weekday-focus', 'focus');                 // Josh changes his mind later
+    assert.equal(rules.get('weekday-focus').action.scene, 'focus', 'the migration does not run again');
+  } finally { store.set('rules', saved); }
 });

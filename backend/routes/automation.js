@@ -19,12 +19,22 @@ router.post('/api/scenes/:id/activate', async (req, res, next) => {
 const ruleView = (r) => ({ ...r, when: rules.describeTrigger(r) });
 router.get('/api/rules', (req, res) => res.json({ rules: rules.list().map(ruleView) }));
 
+// { enabled: true|false } and/or { scene: '<scene id or name>' }
 router.patch('/api/rules/:id', (req, res) => {
-  if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'body must be { enabled: true|false }' });
-  const rule = rules.setEnabled(req.params.id, req.body.enabled);
-  if (!rule) return res.status(404).json({ error: `No rule "${req.params.id}"` });
-  activity.log({ source: 'panel', title: `Rule ${rule.enabled ? 'enabled' : 'disabled'}: ${rule.name}` });
-  res.json({ rule: ruleView(rule) });
+  const { enabled, scene } = req.body || {};
+  if (enabled !== undefined && typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be true or false' });
+  if (enabled === undefined && !scene) return res.status(400).json({ error: 'body must have enabled (true|false) and/or scene' });
+  if (!rules.get(req.params.id)) return res.status(404).json({ error: `No rule "${req.params.id}"` });
+  if (scene) {
+    const r = rules.setScene(req.params.id, scene);
+    if (r.error) return res.status(400).json({ error: r.error });
+    activity.log({ source: 'panel', title: `Rule changed: ${r.rule.name}`, results: [`scene: ${r.from} -> ${r.to}`] });
+  }
+  if (enabled !== undefined) {
+    const rule = rules.setEnabled(req.params.id, enabled);
+    activity.log({ source: 'panel', title: `Rule ${rule.enabled ? 'enabled' : 'disabled'}: ${rule.name}` });
+  }
+  res.json({ rule: ruleView(rules.get(req.params.id)) });
 });
 
 // Run a rule's action right now (to test it), regardless of its trigger

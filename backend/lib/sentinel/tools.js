@@ -346,8 +346,12 @@ const SENTINEL_TOOLS = [
     type: "function",
     function: {
       name: "set_rule",
-      description: "Turn an automation rule on or off by name ('turn off the sunset rule').",
-      parameters: { type: "object", properties: { name: { type: "string", description: "Words from the rule's name" }, enabled: { type: "boolean" } }, required: ["name", "enabled"] }
+      description: "Change an automation rule, found by words from its name: turn it on or off ('turn off the sunset rule') and/or point it at a different scene ('make the weekday morning rule relax lighting').",
+      parameters: { type: "object", properties: {
+        name: { type: "string", description: "Words from the rule's name" },
+        enabled: { type: "boolean", description: "On or off. Leave out to keep it as is." },
+        scene: { type: "string", description: "New scene for the rule (Relax, Focus, Movie Night, All Bright, Goodnight, All Off). Leave out to keep it." },
+      }, required: ["name"] }
     }
   },
   {

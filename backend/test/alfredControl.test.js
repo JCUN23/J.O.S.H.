@@ -87,9 +87,16 @@ test('rules, activity, presence, send to phone', async () => {
   assert.match(listed, /^On: .*Off: /);
   const rules = require('../lib/rules').list();
   const target = rules[0];
-  const word = target.name.split(' ').find((w) => w.length > 3);
+  const word = 'sunset';                                   // 'relax' now names two rules: Alfred asks which
+  assert.match(await executeTool('set_rule', { name: 'relax', enabled: true }), /^Which one: /);
   assert.match(await executeTool('set_rule', { name: word, enabled: !target.enabled }), new RegExp(`Turned ${target.enabled ? 'off' : 'on'}`));
   assert.match(await executeTool('set_rule', { name: 'zebra crossing', enabled: true }), /No rule matches/);
+  // "make the weekday morning rule movie night": scene changes, on/off stays as it was
+  const before = require('../lib/rules').get('weekday-focus').enabled;
+  assert.match(await executeTool('set_rule', { name: 'weekday mornings', scene: 'movie night' }), /^"Movie Night lighting on weekday mornings" now runs Movie Night\./);
+  assert.equal(require('../lib/rules').get('weekday-focus').enabled, before);
+  assert.match(await executeTool('set_rule', { name: 'weekday', scene: 'relax', enabled: true }), /now runs Relax, and turned on/);
+  assert.match(await executeTool('set_rule', { name: 'weekday', scene: 'disco' }), /No scene called "disco"/);
   const activity = require('../lib/activity');
   activity.log({ source: 'presence', title: 'Josh left home', results: ['presence: away'] });
   activity.log({ source: 'gameday', title: 'Game Day: Detroit Lions', results: ['Govee: 4/4 commands ok'] });
