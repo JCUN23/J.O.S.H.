@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import DraggableGrid from './DraggableGrid';
 
 // Must mirror WIDGET_KEYS
@@ -32,5 +32,22 @@ describe('DraggableGrid', () => {
     const kids = ['news', 'weather', false, 'frametv', 'govee'].map((k) => k && <div key={k}>{k}-widget</div>);
     render(<DraggableGrid>{kids}</DraggableGrid>);
     expect(order()).toEqual(['weather', 'news', 'govee', 'frametv']);   // WIDGET_KEYS order, by key
+  });
+
+  it('touch screens: move buttons reorder in edit mode, and the order is saved (Nov 11: iPhone drag just scrolled)', () => {
+    render(<DraggableGrid editMode onEditModeChange={() => {}}>{KEYS.map((k) => <div key={k}>{k}-widget</div>)}</DraggableGrid>);
+    fireEvent.click(screen.getByLabelText('Move sports earlier'));
+    expect(order().slice(0, 2)).toEqual(['sports', 'weather']);
+    fireEvent.click(screen.getByLabelText('Move frametv to the start'));
+    expect(order()[0]).toBe('frametv');
+    fireEvent.click(screen.getByLabelText('Move frametv later'));
+    expect(order().slice(0, 2)).toEqual(['sports', 'frametv']);
+    expect(JSON.parse(localStorage.getItem('batcomputer_widget_order')).slice(0, 2)).toEqual(['sports', 'frametv']);
+    expect(screen.getByLabelText('Move sports earlier').disabled).toBe(true);   // already first
+  });
+
+  it('no move buttons outside edit mode', () => {
+    renderAll();
+    expect(screen.queryByLabelText(/^Move /)).toBeNull();
   });
 });

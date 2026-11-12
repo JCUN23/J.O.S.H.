@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Move, Lock, GripVertical } from 'lucide-react';
+import { Move, Lock, GripVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsUp } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 
 const STORAGE_KEY = 'batcomputer_widget_order';
@@ -128,6 +128,20 @@ const DraggableGrid = ({ children, theme = 'cyan', editMode: editModeProp, onEdi
         localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
     };
 
+    // Touch screens: HTML drag-and-drop is mouse-only (on an iPhone the drag just scrolls,
+    // Nov 11), so edit mode also has move buttons on every widget.
+    const moveWidget = (key, to) => {
+        const from = order.indexOf(key);
+        if (from < 0) return;
+        const target = to === 'first' ? 0 : Math.max(0, Math.min(order.length - 1, from + to));
+        if (target === from) return;
+        const next = [...order];
+        next.splice(from, 1);
+        next.splice(target, 0, key);
+        setOrder(next);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    };
+
     const resetLayout = () => {
         setOrder(WIDGET_KEYS);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(WIDGET_KEYS));
@@ -183,8 +197,27 @@ const DraggableGrid = ({ children, theme = 'cyan', editMode: editModeProp, onEdi
                     >
                         {editMode && (
                             <div className="bg-yellow-900/70 px-3 py-1 text-xs text-yellow-300 flex items-center gap-2 rounded-t">
-                                <GripVertical size={12} />
-                                <span>drag to reorder</span>
+                                <GripVertical size={12} className="hidden lg:inline" />
+                                <span className="hidden lg:inline">drag, or</span>
+                                <span className="lg:hidden">move</span>
+                                {/* Phones stack widgets top to bottom (up/down); the wall grid fills
+                                    columns left to right (left/right). Same action either way. */}
+                                <div className="ml-auto flex items-center gap-1">
+                                    {index > 0 && (
+                                        <button type="button" onClick={() => moveWidget(key, 'first')} aria-label={`Move ${key} to the start`}
+                                            className="h-9 w-9 lg:h-7 lg:w-7 inline-flex items-center justify-center rounded border border-yellow-700 hover:bg-yellow-800/60">
+                                            <ChevronsUp size={16} className="lg:-rotate-90" />
+                                        </button>
+                                    )}
+                                    <button type="button" onClick={() => moveWidget(key, -1)} disabled={index === 0} aria-label={`Move ${key} earlier`}
+                                        className="h-9 w-9 lg:h-7 lg:w-7 inline-flex items-center justify-center rounded border border-yellow-700 hover:bg-yellow-800/60 disabled:opacity-30">
+                                        <ChevronUp size={16} className="lg:hidden" /><ChevronLeft size={16} className="hidden lg:inline" />
+                                    </button>
+                                    <button type="button" onClick={() => moveWidget(key, 1)} disabled={index === orderedWidgets.length - 1} aria-label={`Move ${key} later`}
+                                        className="h-9 w-9 lg:h-7 lg:w-7 inline-flex items-center justify-center rounded border border-yellow-700 hover:bg-yellow-800/60 disabled:opacity-30">
+                                        <ChevronDown size={16} className="lg:hidden" /><ChevronRight size={16} className="hidden lg:inline" />
+                                    </button>
+                                </div>
                             </div>
                         )}
                         <div className="hud-cell">

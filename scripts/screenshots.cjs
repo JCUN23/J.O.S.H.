@@ -242,6 +242,13 @@ async function handle(route) {
   if (process.env.SHOTS_PHONE) {
     await shoot('phone', { device: 'iPhone 15 Pro Max', order: MAIN });
     await shoot('phone-full', { device: 'iPhone 15 Pro Max', order: MAIN, full: true });
+    // Edit mode on the phone: the move buttons (touch can't drag), one real tap
+    await shoot('phone-edit', { device: 'iPhone 15 Pro Max', order: MAIN, setup: async (page) => {
+      await page.getByLabel('Widget Settings').click();
+      await page.getByText('Rearrange widgets').click();
+      await page.getByLabel('Move weather later').click();
+      await page.locator('[data-widget="sports"]').scrollIntoViewIfNeeded();
+    } });
   }
   // The idle screen: three quiet minutes later
   await shoot('idle', { order: MAIN, idle: true, setup: async (page) => { await page.clock.fastForward('03:05'); await page.waitForTimeout(1500); } });
