@@ -303,7 +303,9 @@ def load_model(spec):
 
 
 def score_of(prediction):
-    return max(prediction.values()) if prediction else 0.0
+    # float(): the model returns numpy float32, which json can't encode (Nov 11: every
+    # command failed with "float32 is not JSON serializable" once the score was sent)
+    return float(max(prediction.values())) if prediction else 0.0
 
 
 def run(cfg):
@@ -454,7 +456,7 @@ def wait_until_quiet(api, grace=1.2, timeout=60.0, mic=None, model=None, barge=0
 def handle_command(cfg, api, mic, speaker, noise, score=None, model=None):
     """-> the wake score when Josh said "Alfred" over the reply (the caller starts a new
     command right away), else None"""
-    r = api.post('/api/voice/wake', {'score': score} if score is not None else {})
+    r = api.post('/api/voice/wake', {'score': float(score)} if score is not None else {})
     if not r.get('listen'):
         log(f'  ignored: {r.get("why", "backend said no")}')
         return

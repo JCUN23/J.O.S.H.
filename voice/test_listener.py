@@ -195,3 +195,27 @@ class BargeIn(unittest.TestCase):
     def test_off_without_a_mic(self):
         st = L.wait_until_quiet(FakeApi(1), grace=0.01, timeout=2)
         self.assertNotIn('barged', st)
+
+
+class RealModelTypes(unittest.TestCase):
+    """The real model returns numpy float32; the fakes above use plain floats."""
+
+    def test_scores_are_json_safe(self):
+        import json
+        score = L.score_of({'alfred': np.float32(0.75)})
+        self.assertIs(type(score), float)
+        json.dumps({'score': score})
+
+    def test_a_float32_wake_score_reaches_the_backend(self):
+        import json
+        posted = []
+
+        class Api:
+            def post(self, path, body=None, timeout=10):
+                posted.append(json.dumps(body or {}))           # what the real Api does
+                return {'listen': False, 'why': 'test'}
+
+        cfg = type('C', (), dict(end_silence=1.0, max_s=10.0, min_level=60.0, speech_ratio=2.0, duck_room=120.0,
+                                 followups=0, followup_s=0, barge_threshold=0.6))()
+        L.handle_command(cfg, Api(), FakeMic([]), None, 80, score=np.float32(0.75))
+        self.assertEqual(posted, ['{"score": 0.75}'])
