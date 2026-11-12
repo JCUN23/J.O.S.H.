@@ -1071,6 +1071,7 @@ const BatcomputerHub = () => {
               awaitingCommand={awaitingCommand}
               toggleWakeWordMode={toggleWakeWordMode}
               voiceError={voiceError}
+              voicePanel={voicePanel}
             />
           </div>
 

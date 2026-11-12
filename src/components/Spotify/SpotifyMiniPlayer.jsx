@@ -344,7 +344,7 @@ export default function SpotifyMiniPlayer({ onClose, compact = false, theme, onL
                 <div className={`border rounded-lg p-3 bg-black flex flex-col gap-2 items-center justify-center text-center text-${theme}-300 border-${theme}-800`}>
                     <button
                         onClick={onLogin}
-                        className={`text-sm px-48 py-2 text-white rounded bg-${theme}-700 hover:bg-${theme}-400/30 transition`}
+                        className={`text-sm w-full max-w-[16rem] px-4 py-2 text-white rounded bg-${theme}-700 hover:bg-${theme}-400/30 transition`}
                     >
                         Connect
                     </button>
@@ -354,7 +354,7 @@ export default function SpotifyMiniPlayer({ onClose, compact = false, theme, onL
 
         // ✅ FULL / MODAL VERSION
         return (
-            <div className={`border rounded-lg p-6 bg-black text-center text-${theme}-300 border-${theme}-800}`}>
+            <div className={`border rounded-lg p-6 bg-black text-center text-${theme}-300 border-${theme}-800`}>
                 <div className="text-lg font-bold mb-2">Spotify</div>
                 <p className="text-sm opacity-70 mb-4">
                     Connect your Spotify account to enable playback

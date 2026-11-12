@@ -1,5 +1,7 @@
 import React from 'react';
+import { useEffect, useState } from 'react';
 import { Mic, MicOff, Cpu, Loader2, Ear, EarOff } from 'lucide-react';
+import { getVoiceStatus } from '../utils/systemApi';
 import TimerChips from './TimerChips';
 
 // Voice Assistant Component
@@ -15,8 +17,24 @@ const VoiceAssistant = ({
     wakeWordActive,
     awaitingCommand,
     toggleWakeWordMode,
-    voiceError
+    voiceError,
+    voicePanel = false,
 }) => {
+    // Voice panel: the Pi mic does the listening (the tablet's own wake word stays off),
+    // so the indicator shows the Pi listener, not the browser's (Nov 11: it said
+    // "WAKE WORD INACTIVE" while the Pi was listening fine).
+    const [piMic, setPiMic] = useState(null);          // null = unknown, false = offline, {mic} = online
+    useEffect(() => {
+        if (!voicePanel) return undefined;
+        let alive = true;
+        const load = () => getVoiceStatus()
+            .then((v) => { if (alive) setPiMic(v.listener || false); })
+            .catch(() => { if (alive) setPiMic(false); });
+        load();
+        const id = setInterval(load, 30_000);
+        return () => { alive = false; clearInterval(id); };
+    }, [voicePanel]);
+
     // Determine button state and text
     const getButtonState = () => {
         if (processing) {
@@ -60,19 +78,26 @@ const VoiceAssistant = ({
     const buttonState = getButtonState();
 
     // Determine wake word indicator state
-    const wakeWordIndicatorClass = wakeWordActive
+    const piOn = voicePanel && Boolean(piMic);
+    const wakeWordIndicatorClass = voicePanel
+        ? (piOn ? (listening ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400') : 'bg-gray-800 text-gray-500')
+        : wakeWordActive
         ? awaitingCommand
             ? 'bg-red-900/50 text-red-400'
             : 'bg-green-900/50 text-green-400'
         : 'bg-gray-800 text-gray-500';
 
-    const wakeWordDotClass = wakeWordActive
+    const wakeWordDotClass = voicePanel
+        ? (piOn ? (listening ? 'bg-red-500 animate-pulse' : 'bg-green-500 animate-pulse') : 'bg-gray-600')
+        : wakeWordActive
         ? awaitingCommand
             ? 'bg-red-500 animate-pulse'
             : 'bg-green-500 animate-pulse'
         : 'bg-gray-600';
 
-    const wakeWordText = wakeWordActive
+    const wakeWordText = voicePanel
+        ? (piOn ? (listening ? 'AWAITING COMMAND' : 'PI MIC: LISTENING FOR "ALFRED"') : piMic === false ? 'PI MIC OFFLINE' : 'PI MIC…')
+        : wakeWordActive
         ? awaitingCommand
             ? 'AWAITING COMMAND'
             : 'LISTENING FOR "ALFRED"'
@@ -89,7 +114,7 @@ const VoiceAssistant = ({
                     {processing && <Loader2 className="animate-spin text-cyan-400" size={20} />}
                 </div>
                 <div className="flex gap-2 items-center">
-                    {wakeWordEnabled && (
+                    {(wakeWordEnabled || voicePanel) && (
                         <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${wakeWordIndicatorClass}`}>
                             <div className={`w-2 h-2 rounded-full ${wakeWordDotClass}`} />
                             {wakeWordText}
