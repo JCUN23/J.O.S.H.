@@ -103,6 +103,8 @@ The tablet just keeps working: same URL, same certificate name, same OAuth redir
 |---|---|
 | Ship changes | `npm run deploy` |
 | Live logs | `ssh sentinel-pi journalctl -u sentinel -f` |
+| Back up `.env` + `data/` to the Mac | `npm run backup` (nightly: `bash scripts/backup-install.sh`; kept in `~/sentinel-backups`, newest 14) |
+| Restore a backup | `ssh sentinel-pi 'tar -xzf - -C /opt/sentinel/backend' < ~/sentinel-backups/sentinel-<date>.tgz`, then restart |
 | Restart | `ssh sentinel-pi sudo systemctl restart sentinel` |
 | Status | `ssh sentinel-pi systemctl status sentinel` |
 

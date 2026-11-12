@@ -202,3 +202,28 @@ test('follow-up listening: allowed after Alfred finishes talking, not after musi
   assert.deepEqual((await app.call('POST', '/api/voice/followup', {}, pi)).body, { listen: false, why: 'music is playing' });
   assert.equal((await app.call('GET', '/api/voice/status')).body.followup, false);
 });
+
+test('mic watch: phone alert once when the Pi listener goes quiet, and when it is back (Nov 11)', async (t) => {
+  const restore = quiet(); t.after(restore);
+  T.reset();
+  const sent = [];
+  const notifyMod = require('../lib/notify');
+  const realNotify = notifyMod.notify;
+  notifyMod.notify = (n) => sent.push(n.title);
+  const realNow = Date.now;
+  t.after(() => { notifyMod.notify = realNotify; Date.now = realNow; T.reset(); });
+  const app = await startApp(voice); t.after(app.close);
+  assert.deepEqual(voice._checkListener(), { online: false, alerted: false }, 'never seen: silent');
+  assert.deepEqual(sent, []);
+  await app.call('POST', '/api/voice/heartbeat', { mic: 'UM02' }, { 'X-Voice-Token': 'vt' });
+  voice._checkListener();
+  const t0 = realNow();
+  Date.now = () => t0 + 3 * 60_000;                 // no heartbeat for 3 minutes
+  voice._checkListener();
+  voice._checkListener();
+  assert.deepEqual(sent, ["Alfred can't hear you"], 'alerted once');
+  Date.now = realNow;
+  await app.call('POST', '/api/voice/heartbeat', { mic: 'UM02' }, { 'X-Voice-Token': 'vt' });
+  voice._checkListener();
+  assert.deepEqual(sent, ["Alfred can't hear you", 'Alfred can hear you again']);
+});

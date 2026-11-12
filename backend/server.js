@@ -96,4 +96,6 @@ if (require.main === module) {
   require('./lib/timers').start();
   require('./lib/gameAlerts').start();
   require('./lib/weatherAlerts').start();
+  require('./routes/voice').startMicWatch();          // phone alert if Alfred goes deaf
+  require('./lib/systemStats').startHealthWatch();    // ...or the Pi is under-powered / hot
 }

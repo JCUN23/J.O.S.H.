@@ -82,6 +82,33 @@ async function transcribe(wav) {
 
 // ---- from the Pi ----
 
+// Mic watch: the Pi listener checks in every 60 s. If it stops (crashed, USB mic
+// unplugged, Pi rebooting), Alfred is deaf and nothing says so. Tell Josh's phone, once,
+// and again when it's back. Silent until the listener has been seen at least once.
+let micWasOnline = false;
+let micAlerted = false;
+function checkListener() {
+  const online = Boolean(listenerInfo());
+  const { notify } = require('../lib/notify');
+  if (micWasOnline && !online && !micAlerted) {
+    micAlerted = true;
+    console.warn('🎙️  Pi mic went quiet: no heartbeat');
+    notify({ title: 'Alfred can\'t hear you', message: 'The Pi mic listener stopped checking in (crashed, USB mic unplugged, or the Pi is down). Check: journalctl -u sentinel-voice', category: 'system', priority: 4, tags: ['microphone', 'warning'] });
+  } else if (online && micAlerted) {
+    micAlerted = false;
+    notify({ title: 'Alfred can hear you again', message: `Pi mic back: ${listener?.mic || 'mic'}`, category: 'system', priority: 2, tags: ['microphone'] });
+  }
+  micWasOnline = online || (micWasOnline && micAlerted);
+  return { online, alerted: micAlerted };
+}
+let micTimer = null;
+router.startMicWatch = (intervalMs = 60_000) => {
+  if (micTimer) return;
+  micTimer = setInterval(checkListener, intervalMs);
+  micTimer.unref?.();
+};
+router._checkListener = checkListener;
+
 router.post('/api/voice/heartbeat', fromPi, (req, res) => {
   const first = !listenerInfo();
   listener = { ...(req.body || {}), at: Date.now() };
@@ -213,6 +240,6 @@ router._test = {
   cleanTranscript,
   setFetch: (f) => { fetchImpl = f; },
   setAgent: (f) => { agent = f; },
-  reset: () => { listener = null; speakingUntil = 0; followupOk = true; for (const c of clients) c.res.end(); clients.clear(); },
+  reset: () => { micWasOnline = false; micAlerted = false; listener = null; speakingUntil = 0; followupOk = true; for (const c of clients) c.res.end(); clients.clear(); },
 };
 module.exports = router;

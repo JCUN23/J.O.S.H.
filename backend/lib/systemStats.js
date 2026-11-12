@@ -107,4 +107,39 @@ function summary(s) {
   return `${s.model || 'The host'}: ${bits.join(', ')}.${health}`;
 }
 
-module.exports = { snapshot, summary, decodeThrottled };
+// Power/heat watch: under-voltage is the classic cause of random Pi weirdness (SD card
+// corruption, USB mic dropouts), and the widget only shows it if someone's looking.
+// Tell Josh's phone when it's happening now, at most once per COOLDOWN per problem.
+const COOLDOWN_MS = 6 * 3600_000;
+const HOT_C = 80;                          // the Pi 5 starts throttling here
+const lastAlert = {};
+async function checkHealth({ now = Date.now(), notify = require('./notify').notify, stats } = {}) {
+  const s = stats || await snapshot();
+  const problems = [...(s.throttled?.now || [])];
+  if (s.tempC != null && s.tempC >= HOT_C && !problems.includes('temperature limit')) problems.push(`${Math.round(s.tempC)} C`);
+  const fresh = problems.filter((p) => !lastAlert[p] || now - lastAlert[p] > COOLDOWN_MS);
+  if (!fresh.length) return [];
+  fresh.forEach((p) => { lastAlert[p] = now; });
+  const power = fresh.includes('under-voltage');
+  notify({
+    title: power ? 'Pi power problem: under-voltage' : `Pi running hot: ${fresh.join(', ')}`,
+    message: power
+      ? 'The power supply can\'t keep up. Use the official 27 W Pi 5 supply, or a short good USB-C cable. It can corrupt the SD card and drop the USB mic.'
+      : `${summary(s)} Check the fan and airflow.`,
+    category: 'system', priority: 4, tags: ['warning'],
+  });
+  console.warn(`🩺 Pi health alert: ${fresh.join(', ')}`);
+  return fresh;
+}
+
+let healthTimer = null;
+function startHealthWatch(intervalMs = 5 * 60_000) {
+  if (healthTimer) return;
+  const tick = () => checkHealth().catch(() => {});
+  setTimeout(tick, 60_000).unref?.();
+  healthTimer = setInterval(tick, intervalMs);
+  healthTimer.unref?.();
+}
+const _resetHealth = () => { for (const k of Object.keys(lastAlert)) delete lastAlert[k]; };
+
+module.exports = { snapshot, summary, decodeThrottled, checkHealth, startHealthWatch, _resetHealth };

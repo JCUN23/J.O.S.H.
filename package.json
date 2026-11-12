@@ -12,7 +12,8 @@
     "deploy": "bash scripts/deploy.sh",
     "test": "vitest run",
     "screenshots": "vite build && node scripts/screenshots.cjs dist docs/screenshots",
-    "test:all": "vitest run && npm --prefix backend test"
+    "test:all": "vitest run && npm --prefix backend test",
+    "backup": "bash scripts/backup-pi.sh"
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",

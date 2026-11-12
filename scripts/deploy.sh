@@ -62,7 +62,7 @@ echo "==> Installing prod deps + Pi mic listener on Pi, restarting"
 # SKIP_VOICE=1 to leave the Pi mic alone.
 VOICE_STEP="bash $APP_DIR/scripts/voice-install.sh &&"
 [ "${SKIP_VOICE:-}" = "1" ] && VOICE_STEP=""
-ssh -t "$HOST" "cd $APP_DIR/backend && npm ci --omit=dev --no-audit --no-fund && $VOICE_STEP sudo systemctl restart sentinel"
+ssh -t "$HOST" "cd $APP_DIR/backend && npm ci --omit=dev --no-audit --no-fund && bash $APP_DIR/scripts/pi-tune.sh && $VOICE_STEP sudo systemctl restart sentinel"
 
 echo "==> Health check"
 if ssh "$HOST" 'for i in $(seq 1 20); do curl -fsS localhost:3001/api/health >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'; then

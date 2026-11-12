@@ -53,3 +53,21 @@ test('not a Pi (Mac in dev): nulls, not errors; GET /api/system works', async (t
   assert.ok(r.body.memory.totalMb > 0, 'falls back to os.totalmem');
   assert.match(stats.summary(r.body), /^The host: /);
 });
+
+test('health watch: under-voltage and heat alert the phone, once per 6 hours each (Nov 11)', async () => {
+  stats._resetHealth();
+  const sent = [];
+  const notify = (n) => sent.push(n.title);
+  const base = { model: 'Raspberry Pi 5', tempC: 55, cpuPercent: 10, memory: { totalMb: 2000, usedMb: 900 }, uptimeS: 3600 };
+  const ok = { ...base, throttled: { raw: '0x0', now: [], sinceBoot: [] } };
+  assert.deepEqual(await stats.checkHealth({ stats: ok, notify }), []);
+  const uv = { ...base, throttled: { raw: '0x50005', now: ['under-voltage', 'throttled'], sinceBoot: ['under-voltage', 'throttled'] } };
+  const t0 = Date.now();
+  assert.deepEqual(await stats.checkHealth({ stats: uv, notify, now: t0 }), ['under-voltage', 'throttled']);
+  assert.deepEqual(await stats.checkHealth({ stats: uv, notify, now: t0 + 60_000 }), [], 'no repeat a minute later');
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /under-voltage/);
+  assert.deepEqual(await stats.checkHealth({ stats: { ...ok, tempC: 82.4 }, notify, now: t0 + 120_000 }), ['82 C']);
+  assert.match(sent[1], /running hot/);
+  assert.deepEqual(await stats.checkHealth({ stats: uv, notify, now: t0 + 7 * 3600_000 }).then((r) => r.length), 2, 'again after 6h');
+});
