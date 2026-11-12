@@ -845,9 +845,12 @@ const BatcomputerHub = () => {
     console.log('[Sentinel] Wake word listening stopped');
   }, []);
 
-  // Initialize wake word listening on mount if enabled
+  // Initialize wake word listening on mount if enabled. Never on the voice panel: the Pi
+  // mic does the listening there, and Chrome's speech recognition on Android fights the
+  // reply audio for the speaker (Nov 11: Alfred's voice stuttering on every word) and
+  // hears commands the Pi also hears (doubled commands).
   useEffect(() => {
-    if (wakeWordEnabled && !isLocked && !showOnboarding) {
+    if (wakeWordEnabled && !voicePanel && !isLocked && !showOnboarding) {
       // Small delay to let everything initialize
       const timer = setTimeout(() => {
         startWakeWordListening();
@@ -861,7 +864,7 @@ const BatcomputerHub = () => {
         } catch { /* ignore */ }
       }
     };
-  }, [wakeWordEnabled, isLocked, showOnboarding, startWakeWordListening]);
+  }, [wakeWordEnabled, voicePanel, isLocked, showOnboarding, startWakeWordListening]);
 
   // Toggle wake word mode
   const toggleWakeWordMode = useCallback(() => {
@@ -870,9 +873,9 @@ const BatcomputerHub = () => {
       stopWakeWordListening();
     } else {
       setWakeWordEnabled(true);
-      startWakeWordListening();
+      if (!voicePanel) startWakeWordListening();     // voice panel: the Pi mic listens instead
     }
-  }, [wakeWordEnabled, startWakeWordListening, stopWakeWordListening]);
+  }, [wakeWordEnabled, voicePanel, startWakeWordListening, stopWakeWordListening]);
 
   // Update clock
   useEffect(() => {
