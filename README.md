@@ -61,7 +61,9 @@ He also speaks up unprompted: a briefing the first time the panel sees me in the
 |---|---|---|
 | ![Devices](docs/screenshots/devices.png) | ![Color studio](docs/screenshots/color.png) | ![Idle screen](docs/screenshots/idle.png) |
 
-<sub>Rendered from the real app with sample data (`npm run screenshots`): no real devices, accounts, calendar or location.</sub>
+<p align="center"><img src="docs/screenshots/phone.png" alt="The same panel as an iPhone home-screen app" width="300"><br><sub>The iPhone app: the same panel, installed from Safari over the private tailnet. Widgets only; the wall tablet keeps the voice.</sub></p>
+
+<sub>Rendered from the real app with sample data (`npm run screenshots`; `SHOTS_PHONE=1` adds the iPhone view): no real devices, accounts, calendar or location.</sub>
 
 ---
 

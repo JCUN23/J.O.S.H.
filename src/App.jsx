@@ -18,6 +18,7 @@ import { getVoicePanel, setVoicePanel, connectPiVoice, reportSpeaking } from './
 import { Music } from 'lucide-react';
 import SpotifyMiniPlayer from "./components/Spotify/SpotifyMiniPlayer";
 import FaceLock from './components/AuthAndProfiles/FaceLock';
+import { isPhone } from './utils/device';
 import NewsWidget from './components/NewsWidget';
 import { exchangeCodeForToken } from "./components/Spotify/spotifyAuth";
 import { startSpotifyAuth, startSpotifyTokenSync } from "./components/Spotify/spotifyAuth";
@@ -60,8 +61,9 @@ const BatcomputerHub = () => {
     if (saved !== null) return saved !== 'false';
     // Default off on Android: Chrome's speech recognition grabs audio focus each time
     // it (re)starts, so always-on listening makes Spotify on the same device pause and
-    // resume constantly. Still one tap to turn on; the choice is remembered per device.
-    return !/Android/i.test(navigator.userAgent);
+    // resume constantly. Off on phones too (the iPhone app is for glancing at widgets).
+    // Still one tap to turn on; the choice is remembered per device.
+    return !/Android/i.test(navigator.userAgent) && !isPhone();
   });
   const [awaitingCommand, setAwaitingCommand] = useState(false);
   const [idleEnabled, setIdleEnabledState] = useState(getIdleEnabled);   // per device
@@ -91,7 +93,9 @@ const BatcomputerHub = () => {
   // Face Lock State
   // Start locked when faces are registered (cached copy of the server's list). With no
   // faces there is no way to unlock, so start unlocked (same guard as the Lock button).
-  const [isLocked, setIsLocked] = useState(() => getCachedFaces().length > 0);
+  // Face lock on start: the wall panel only. A phone has its own lock (Face ID), and the
+  // panel is only reachable on Josh's tailnet anyway.
+  const [isLocked, setIsLocked] = useState(() => !isPhone() && getCachedFaces().length > 0);
   // Whether we already locked at startup from the local cache (see face sync below).
   const startedLockedRef = useRef(getCachedFaces().length > 0);
   // eslint-disable-next-line no-unused-vars
@@ -187,7 +191,7 @@ const BatcomputerHub = () => {
     const checkFaces = () => setHasRegisteredFaces(getCachedFaces().length > 0);
     checkFaces();
     syncFaces().then((faces) => {
-      if (faces.length && !startedLockedRef.current) setIsLocked(true);
+      if (faces.length && !startedLockedRef.current && !isPhone()) setIsLocked(true);
       startedLockedRef.current = true; // startup lock decided; later changes don't re-lock
     });
 
@@ -973,7 +977,8 @@ const BatcomputerHub = () => {
     }
   };
 
-  const quoteTab = <div className={`hud-quote col-span-12 border border-${theme}-800 rounded-lg p-3 text-${theme}-400`} title={`${quoteText} - ${quoteAuthor}`}>
+  // The quote: wall-panel decoration; hidden on phones, where screen space is for widgets
+  const quoteTab = <div className={`hud-quote hidden sm:block col-span-12 border border-${theme}-800 rounded-lg p-3 text-${theme}-400`} title={`${quoteText} - ${quoteAuthor}`}>
     <p>{quoteText}<a> - {quoteAuthor}</a></p>
   </div>
 

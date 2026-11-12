@@ -1,13 +1,11 @@
 import { BACKEND_URL } from '../config';
+import { isWallPanel } from './device';
 
 // Which device runs what the Pi mic hears. Per device; default on for the installed
-// wall-panel app (standalone display mode), off in a normal browser tab (your laptop),
-// so one command never runs twice.
+// wall-panel app, off in a browser tab (your laptop) and on phones, even installed (the
+// iPhone app must not pull Pi commands off the wall), so one command never runs twice.
 const KEY = 'voice_panel';
 
-const isInstalledApp = () => {
-    try { return window.matchMedia('(display-mode: standalone)').matches; } catch { return false; }
-};
 
 export function getVoicePanel() {
     try {
@@ -15,7 +13,7 @@ export function getVoicePanel() {
         if (v === 'on') return true;
         if (v === 'off') return false;
     } catch { /* storage unavailable */ }
-    return isInstalledApp();
+    return isWallPanel();
 }
 
 export function setVoicePanel(on) {

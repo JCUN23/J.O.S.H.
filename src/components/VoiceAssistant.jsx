@@ -104,18 +104,20 @@ const VoiceAssistant = ({
         : 'WAKE WORD INACTIVE';
 
     return (
-        <div className={`hud-voice col-span-12 bg-gradient-to-r from-${theme}-100 to-${theme}-200 border border-${theme}-800 rounded-lg p-3 px-6`}>
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
+        <div className={`hud-voice col-span-12 bg-gradient-to-r from-${theme}-100 to-${theme}-200 border border-${theme}-800 rounded-lg p-3 px-4 sm:px-6`}>
+            {/* flex-wrap: on a phone the buttons drop under the title instead of off-screen.
+                lg:flex-nowrap: the wall tablet keeps one row (hud.css trims the subtitle instead) */}
+            <div className="flex flex-wrap lg:flex-nowrap gap-2 items-center justify-between mb-4">
+                <div className="flex flex-wrap lg:flex-nowrap items-center gap-3 min-w-0">
                     <Cpu className={`text-${theme}-400`} size={24} />
-                    <h2 className={`text-xl font-semibold text-${theme}-400`}>SENTINEL INTERFACE</h2>
+                    <h2 className={`text-base sm:text-xl font-semibold text-${theme}-400`}>SENTINEL INTERFACE</h2>
                     <h4 className={`text-${theme}-400 hidden md:block`}>Strategic Intelligence & Executive Liaison</h4>
                     <TimerChips theme={theme} />
                     {processing && <Loader2 className="animate-spin text-cyan-400" size={20} />}
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="flex flex-wrap lg:flex-nowrap gap-2 items-center">
                     {(wakeWordEnabled || voicePanel) && (
-                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${wakeWordIndicatorClass}`}>
+                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs whitespace-nowrap ${wakeWordIndicatorClass}`}>
                             <div className={`w-2 h-2 rounded-full ${wakeWordDotClass}`} />
                             {wakeWordText}
                         </div>

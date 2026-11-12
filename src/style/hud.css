@@ -250,6 +250,11 @@ body { background: #020407; }
 }
 
 /* ---------- Horizontal widget grid (DraggableGrid, wide screens) ---------- */
+/* Phones: a smaller wordmark so the header fits one screen width */
+@media (max-width: 639px) {
+  .hud-wordmark { font-size: 2rem; letter-spacing: 0.1em; }
+}
+
 @media (min-width: 1024px) {
   /* Three columns visible at a time; more columns scroll in from the right. */
   .hud-grid { grid-auto-columns: max(360px, calc((100% - 1.5rem) / 3)); scrollbar-width: thin; scrollbar-color: rgb(var(--hud) / 0.35) transparent; }

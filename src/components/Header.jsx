@@ -64,20 +64,22 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
     };
 
     return (
-    <div className={`hud-header mb-6 flex items-center justify-between border-b ${border} pb-4`}>
+    // Phones (below sm): no subtitle or clock, icon-only buttons, so the header fits
+    // one screen width (Nov 11: it forced the iPhone page to 910 px wide). Tablet unchanged.
+    <div className={`hud-header mb-4 sm:mb-6 flex flex-wrap lg:flex-nowrap gap-y-3 items-center justify-between border-b ${border} pb-4`}>
         <div className="flex items-center gap-4">
             <div className="hud-wordmark">J.O.S.H.</div>
-            <div className={`text-sm ${text_700}`}>Joint Operations & Systems Hub v1.1</div>
+            <div className={`text-sm ${text_700} hidden md:block`}>Joint Operations & Systems Hub v1.1</div>
         </div>
         <div className="text-right flex items-center relative">
             {/* Widget Visibility Dropdown */}
-            <div className="relative mr-4" ref={dropdownRef}>
+            <div className="relative mr-2 sm:mr-4" ref={dropdownRef}>
                 <button
                     onClick={() => setShowWidgetMenu(!showWidgetMenu)}
-                    className={`z-50 h-14 inline-flex items-center rounded px-4 shadow-lg border ${border} ${text_400} hover:bg-${theme}-600 hover:scale-105 transition-all`}
+                    className={`z-50 h-11 sm:h-14 inline-flex items-center rounded px-3 sm:px-4 shadow-lg border ${border} ${text_400} hover:bg-${theme}-600 hover:scale-105 transition-all`}
                     aria-label="Widget Settings"
                 >
-                    <Settings size={20} className={`inline-block mr-2 text-${theme}-400`} />Widgets
+                    <Settings size={20} className={`inline-block sm:mr-2 text-${theme}-400`} /><span className="hidden sm:inline">Widgets</span>
                 </button>
 
                 {showWidgetMenu && (
@@ -136,23 +138,23 @@ const Header = ({ time, setTheme, theme, mode, toggleMode, setIsLocked, widgetVi
             </div>
 
             <button onClick={handleLockClick}
-                className={`mr-4 z-50 h-14 inline-flex items-center rounded px-4 shadow-lg border ${border} ${text_400} hover:bg-${theme}-600 ${registeredFaces.length === 0 ? 'cursor-not-allowed opacity-50' : 'hover:scale-105 transition-all'}`}
+                className={`mr-2 sm:mr-4 z-50 h-11 sm:h-14 inline-flex items-center rounded px-3 sm:px-4 shadow-lg border ${border} ${text_400} hover:bg-${theme}-600 ${registeredFaces.length === 0 ? 'cursor-not-allowed opacity-50' : 'hover:scale-105 transition-all'}`}
                 aria-label="Lock UI"
             >
-                <Lock size={20} className={`inline-block mr-2 text-${theme}-400`} />Lock
+                <Lock size={20} className={`inline-block sm:mr-2 text-${theme}-400`} /><span className="hidden sm:inline">Lock</span>
             </button>
-            <div className={`flex items-center gap-2 pr-4 border-r ${border} mr-4`}>
-                <button className={`h-14 px-4 inline-flex items-center border ${border} rounded text-${theme}-400`} onClick={updateTheme}>Color</button>
+            <div className={`flex items-center gap-2 sm:pr-4 sm:border-r ${border} sm:mr-4`}>
+                <button className={`h-11 sm:h-14 px-3 sm:px-4 inline-flex items-center border ${border} rounded text-${theme}-400`} onClick={updateTheme}>Color</button>
                 <button
                     onClick={toggleMode}
-                    className={`h-14 w-14 inline-flex items-center justify-center border ${border} rounded text-${theme}-400`}
+                    className={`h-11 w-11 sm:h-14 sm:w-14 inline-flex items-center justify-center border ${border} rounded text-${theme}-400`}
                     aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                     title={mode === 'dark' ? 'Light mode' : 'Dark mode'}
                 >
                     {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
             </div>
-            <div>
+            <div className="hidden sm:block">
                 <div className={`hud-clock text-2xl text-${theme}-300`}>
                     {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </div>

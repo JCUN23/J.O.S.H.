@@ -5,7 +5,7 @@
 // Needs Playwright with Chromium: npm i -D playwright && npx playwright install chromium
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium, devices } = require('playwright');
 
 const DIST = path.resolve(process.argv[2] || 'dist');
 const OUT = path.resolve(process.argv[3] || 'docs/screenshots');
@@ -186,8 +186,11 @@ async function handle(route) {
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
-  const shoot = async (name, { width = 1280, height = 800, scale = 2, setup, order, idle, announce = true, clip } = {}) => {
-    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, timezoneId: TZ, locale: 'en-US' });
+  // device: a Playwright device profile (phone screen size, pixel density, iOS user agent)
+  const shoot = async (name, { width = 1280, height = 800, scale = 2, setup, order, idle, announce = true, clip, device, full } = {}) => {
+    const ctx = await browser.newContext(device
+      ? { ...devices[device], timezoneId: TZ, locale: 'en-US' }
+      : { viewport: { width, height }, deviceScaleFactor: scale, timezoneId: TZ, locale: 'en-US' });
     handle.announced = !announce;
     await ctx.route('**/*', handle);
     await ctx.clock.install({ time: NOW });
@@ -207,7 +210,7 @@ async function handle(route) {
     if (setup) await setup(page);
     await page.waitForTimeout(800);
     if (clip) await page.locator(clip).first().screenshot({ path: path.join(OUT, `${name}.png`) });
-    else await page.screenshot({ path: path.join(OUT, `${name}.png`) });
+    else await page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: Boolean(full) });
     console.log('wrote', path.join(OUT, `${name}.png`));
     await ctx.close();
   };
@@ -235,6 +238,11 @@ async function handle(route) {
       await page.evaluate(() => Object.assign(document.querySelector('[data-widget="phillips_hue"] [data-testid="color-studio"]').style, { padding: '20px', background: '#01080e', borderRadius: '12px' }));
     },
   });
+  // The iPhone app (Add to Home Screen): what fits on one screen, and the whole scroll
+  if (process.env.SHOTS_PHONE) {
+    await shoot('phone', { device: 'iPhone 15 Pro Max', order: MAIN });
+    await shoot('phone-full', { device: 'iPhone 15 Pro Max', order: MAIN, full: true });
+  }
   // The idle screen: three quiet minutes later
   await shoot('idle', { order: MAIN, idle: true, setup: async (page) => { await page.clock.fastForward('03:05'); await page.waitForTimeout(1500); } });
   await browser.close();
